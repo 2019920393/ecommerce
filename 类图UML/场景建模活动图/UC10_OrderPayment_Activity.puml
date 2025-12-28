@@ -1,0 +1,55 @@
+@startuml UC10_OrderPayment_Activity
+
+' ============================
+' 中文字体配置（防止导出时中文乱码）
+' ============================
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+title UC10: 订单支付 - 活动图 (UML 2.5)
+
+start
+
+:用户进入支付页面;
+:系统显示订单信息和支付方式;
+:用户选择支付方式;
+:用户点击"确认支付";
+
+:系统创建支付订单;
+:系统生成支付流水号;
+:系统调用模拟支付服务;
+
+if (支付成功?) then (是)
+  
+  :更新支付订单状态为"支付成功";
+  
+  split
+    :更新订单状态为"待发货";
+  split again
+    :实际扣减库存;
+  split again
+    :清空购物车;
+  end split
+  
+  if (库存扣减成功?) then (是)
+    :创建支付记录;
+    :显示支付成功页面;
+    stop
+  else (否)
+    :标记订单异常;
+    :通知管理员;
+    end
+  endif
+  
+else (否)
+  
+  :更新支付订单状态为"支付失败";
+  :更新订单状态为"已取消";
+  :释放库存;
+  :显示支付失败页面;
+  end
+  
+endif
+
+@enduml
+

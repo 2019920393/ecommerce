@@ -1,0 +1,328 @@
+@startuml PaymentComponent_ClassDiagram
+
+!theme plain
+
+' ============================
+' 中文字体配置
+' ============================
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+title 支付构件内部类图
+
+' ============================
+' 表示层
+' ============================
+package "表示层 (Presentation Layer)" {
+    class PaymentController <<Boundary>> {
+        - paymentService: PaymentService
+        + createPayment(request: CreatePaymentRequest): ResponseEntity<CreatePaymentResponse>
+        + alipayCallback(params: Map<String, String>): ResponseEntity<String>
+        + wechatCallback(request: WechatCallbackRequest): ResponseEntity<String>
+        + getPaymentStatus(paymentNumber: String): ResponseEntity<PaymentStatusResponse>
+    }
+    
+    class CreatePaymentRequest <<DTO>> {
+        + orderNumber: String
+        + paymentMethod: PaymentMethod
+    }
+    
+    class CreatePaymentResponse <<DTO>> {
+        + paymentNumber: String
+        + orderNumber: String
+        + amount: BigDecimal
+        + paymentMethod: PaymentMethod
+        + paymentUrl: String
+        + qrCode: String
+        + createTime: LocalDateTime
+        + expireTime: LocalDateTime
+    }
+    
+    class PaymentStatusResponse <<DTO>> {
+        + paymentNumber: String
+        + status: PaymentStatus
+        + amount: BigDecimal
+        + payTime: LocalDateTime
+    }
+}
+
+' ============================
+' 业务逻辑层
+' ============================
+package "业务逻辑层 (Business Logic Layer)" {
+    class PaymentService <<Control>> {
+        - paymentOrderRepository: PaymentOrderRepository
+        - orderServiceClient: OrderServiceClient
+        - paymentGatewayFactory: PaymentGatewayFactory
+        + createPaymentOrder(orderNumber: String, paymentMethod: PaymentMethod): CreatePaymentResponse
+        + getPaymentStatus(paymentNumber: String): PaymentStatusResponse
+        + handlePaymentCallback(paymentNumber: String, status: PaymentStatus, transactionId: String): void
+        - generatePaymentNumber(): String
+        - validateOrder(order: Order): void
+    }
+    
+    class PaymentCallbackHandler <<Control>> {
+        - paymentOrderRepository: PaymentOrderRepository
+        - paymentRecordRepository: PaymentRecordRepository
+        - orderServiceClient: OrderServiceClient
+        - inventoryServiceClient: InventoryServiceClient
+        - rabbitTemplate: RabbitTemplate
+        + handlePaymentSuccess(paymentNumber: String, transactionId: String, payTime: LocalDateTime): void
+        + handlePaymentFailed(paymentNumber: String, failReason: String): void
+        + verifySignature(params: Map<String, String>, signType: String): boolean
+        - publishPaymentSuccessMessage(paymentOrder: PaymentOrder): void
+        - createPaymentRecord(paymentOrder: PaymentOrder, status: PaymentStatus): void
+    }
+    
+    class PaymentGatewayFactory <<Factory>> {
+        - alipayGateway: AlipayGateway
+        - wechatGateway: WechatGateway
+        - bankCardGateway: BankCardGateway
+        + getGateway(paymentMethod: PaymentMethod): PaymentGateway
+    }
+}
+
+' ============================
+' 领域层
+' ============================
+package "领域层 (Domain Layer)" {
+    class PaymentOrder <<Entity>> {
+        - id: Long
+        - paymentNumber: String
+        - orderNumber: String
+        - orderId: Long
+        - userId: Long
+        - amount: BigDecimal
+        - paymentMethod: PaymentMethod
+        - status: PaymentStatus
+        - transactionId: String
+        - createTime: LocalDateTime
+        - payTime: LocalDateTime
+        - expireTime: LocalDateTime
+        + generatePaymentNumber(): String
+        + setOrderInfo(orderId: Long, amount: BigDecimal): void
+        + setPaymentMethod(method: PaymentMethod): void
+        + setStatus(status: PaymentStatus): void
+        + setExpireTime(minutes: Integer): void
+        + updateStatus(status: PaymentStatus): void
+        + isExpired(): boolean
+        + isPaid(): boolean
+    }
+    
+    class PaymentRecord <<Entity>> {
+        - id: Long
+        - paymentNumber: String
+        - userId: Long
+        - amount: BigDecimal
+        - paymentMethod: PaymentMethod
+        - status: PaymentStatus
+        - transactionId: String
+        - requestParams: String
+        - responseParams: String
+        - failReason: String
+        - createTime: LocalDateTime
+        + createPaymentRecord(paymentOrder: PaymentOrder, status: PaymentStatus): PaymentRecord
+    }
+    
+    enum PaymentMethod <<Enumeration>> {
+        ALIPAY
+        WECHAT
+        BANK_CARD
+    }
+    
+    enum PaymentStatus <<Enumeration>> {
+        PENDING
+        SUCCESS
+        FAILED
+        CANCELLED
+    }
+}
+
+' ============================
+' 数据访问层
+' ============================
+package "数据访问层 (Data Access Layer)" {
+    interface PaymentOrderRepository <<Repository>> {
+        + save(paymentOrder: PaymentOrder): PaymentOrder
+        + findByPaymentNumber(paymentNumber: String): PaymentOrder
+        + findByOrderNumber(orderNumber: String): PaymentOrder
+        + findByTransactionId(transactionId: String): PaymentOrder
+        + findExpiredPayments(expireTime: LocalDateTime): List<PaymentOrder>
+        + update(paymentOrder: PaymentOrder): void
+    }
+    
+    class PaymentOrderRepositoryImpl <<Repository>> {
+        - paymentOrderMapper: PaymentOrderMapper
+        + save(paymentOrder: PaymentOrder): PaymentOrder
+        + findByPaymentNumber(paymentNumber: String): PaymentOrder
+        + findByOrderNumber(orderNumber: String): PaymentOrder
+        + findByTransactionId(transactionId: String): PaymentOrder
+        + findExpiredPayments(expireTime: LocalDateTime): List<PaymentOrder>
+        + update(paymentOrder: PaymentOrder): void
+    }
+    
+    interface PaymentRecordRepository <<Repository>> {
+        + save(record: PaymentRecord): PaymentRecord
+        + findByPaymentNumber(paymentNumber: String): List<PaymentRecord>
+    }
+    
+    class PaymentRecordRepositoryImpl <<Repository>> {
+        - paymentRecordMapper: PaymentRecordMapper
+        + save(record: PaymentRecord): PaymentRecord
+        + findByPaymentNumber(paymentNumber: String): List<PaymentRecord>
+    }
+    
+    interface PaymentOrderMapper <<Mapper>> {
+        + insert(paymentOrder: PaymentOrder): int
+        + selectByPaymentNumber(paymentNumber: String): PaymentOrder
+        + selectByOrderNumber(orderNumber: String): PaymentOrder
+        + selectByTransactionId(transactionId: String): PaymentOrder
+        + selectExpiredPayments(expireTime: LocalDateTime): List<PaymentOrder>
+        + updateById(paymentOrder: PaymentOrder): int
+    }
+    
+    interface PaymentRecordMapper <<Mapper>> {
+        + insert(record: PaymentRecord): int
+        + selectByPaymentNumber(paymentNumber: String): List<PaymentRecord>
+    }
+}
+
+' ============================
+' 第三方支付网关
+' ============================
+package "第三方支付网关 (Payment Gateway)" {
+    interface PaymentGateway <<Interface>> {
+        + processPayment(paymentOrder: PaymentOrder): PaymentResult
+        + queryPaymentStatus(transactionId: String): PaymentStatus
+        + verifyCallback(params: Map<String, String>): boolean
+    }
+    
+    class AlipayGateway <<External>> {
+        - alipayClient: AlipayClient
+        - appId: String
+        - privateKey: String
+        - publicKey: String
+        + processPayment(paymentOrder: PaymentOrder): PaymentResult
+        + queryPaymentStatus(transactionId: String): PaymentStatus
+        + verifyCallback(params: Map<String, String>): boolean
+        - buildPaymentRequest(paymentOrder: PaymentOrder): AlipayTradePagePayRequest
+        - verifySign(params: Map<String, String>): boolean
+    }
+    
+    class WechatGateway <<External>> {
+        - wechatPayClient: WechatPayClient
+        - appId: String
+        - mchId: String
+        - apiKey: String
+        + processPayment(paymentOrder: PaymentOrder): PaymentResult
+        + queryPaymentStatus(transactionId: String): PaymentStatus
+        + verifyCallback(params: Map<String, String>): boolean
+        - buildPaymentRequest(paymentOrder: PaymentOrder): WechatPayRequest
+        - decryptCallback(ciphertext: String): String
+    }
+    
+    class BankCardGateway <<External>> {
+        - bankPayClient: BankPayClient
+        + processPayment(paymentOrder: PaymentOrder): PaymentResult
+        + queryPaymentStatus(transactionId: String): PaymentStatus
+        + verifyCallback(params: Map<String, String>): boolean
+    }
+    
+    class PaymentResult <<Value Object>> {
+        + success: boolean
+        + paymentUrl: String
+        + qrCode: String
+        + transactionId: String
+        + message: String
+    }
+}
+
+' ============================
+' 外部服务接口
+' ============================
+package "外部服务接口 (External Service Interface)" {
+    interface OrderServiceClient <<External>> {
+        + getOrderDetail(orderNumber: String): Order
+        + updateOrderStatus(orderNumber: String, status: OrderStatus): void
+        + cancelOrder(orderNumber: String): void
+    }
+    
+    interface InventoryServiceClient <<External>> {
+        + deductStock(orderNumber: String): StockDeductResult
+        + releaseStock(orderNumber: String): StockReleaseResult
+    }
+}
+
+' ============================
+' 消息队列
+' ============================
+package "消息队列 (Message Queue)" {
+    class PaymentSuccessPublisher <<Publisher>> {
+        - rabbitTemplate: RabbitTemplate
+        + publish(message: PaymentSuccessMessage): void
+    }
+    
+    class PaymentSuccessMessage <<Message>> {
+        + paymentNumber: String
+        + orderNumber: String
+        + userId: Long
+        + amount: BigDecimal
+        + paymentMethod: String
+        + status: String
+        + transactionId: String
+        + payTime: LocalDateTime
+    }
+}
+
+' ============================
+' 关系
+' ============================
+
+' 表示层依赖业务逻辑层
+PaymentController --> PaymentService
+PaymentController ..> CreatePaymentRequest
+PaymentController ..> CreatePaymentResponse
+PaymentController ..> PaymentStatusResponse
+
+' 业务逻辑层依赖领域层
+PaymentService --> PaymentOrder
+PaymentService --> PaymentMethod
+PaymentService --> PaymentStatus
+PaymentService --> PaymentGatewayFactory
+PaymentCallbackHandler --> PaymentOrder
+PaymentCallbackHandler --> PaymentRecord
+
+' 业务逻辑层依赖数据访问层
+PaymentService --> PaymentOrderRepository
+PaymentCallbackHandler --> PaymentOrderRepository
+PaymentCallbackHandler --> PaymentRecordRepository
+
+' 业务逻辑层依赖外部服务
+PaymentService --> OrderServiceClient
+PaymentCallbackHandler --> OrderServiceClient
+PaymentCallbackHandler --> InventoryServiceClient
+
+' 领域层关系
+PaymentOrder --> PaymentMethod
+PaymentOrder --> PaymentStatus
+PaymentRecord --> PaymentMethod
+PaymentRecord --> PaymentStatus
+
+' 数据访问层实现
+PaymentOrderRepositoryImpl ..|> PaymentOrderRepository
+PaymentOrderRepositoryImpl --> PaymentOrderMapper
+PaymentRecordRepositoryImpl ..|> PaymentRecordRepository
+PaymentRecordRepositoryImpl --> PaymentRecordMapper
+
+' 支付网关
+PaymentGatewayFactory --> PaymentGateway
+AlipayGateway ..|> PaymentGateway
+WechatGateway ..|> PaymentGateway
+BankCardGateway ..|> PaymentGateway
+PaymentGateway ..> PaymentResult
+
+' 消息队列
+PaymentCallbackHandler --> PaymentSuccessPublisher
+PaymentSuccessPublisher ..> PaymentSuccessMessage
+
+@enduml

@@ -1,0 +1,252 @@
+@startuml 生产环境部署图_Kubernetes
+!theme plain
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 12
+skinparam componentStyle rectangle
+
+title 生产环境部署架构图（Kubernetes）\nUML 2.5 部署图
+
+' 外部用户
+actor "终端用户" as endUser
+node "用户浏览器/移动端" as client
+
+' Kubernetes集群
+node "Kubernetes Cluster" as k8sCluster {
+    
+    ' Ingress层
+    package "<<Ingress Controller>>" as ingressLayer {
+        node "Ingress\n:Pod" as ingress {
+            component "Nginx/APISIX" as ingressComp
+        }
+    }
+    
+    ' 前端和网关层
+    package "应用入口层" as entryLayer {
+        node "Frontend\n:Deployment" as frontendDeploy {
+            node "Frontend Pod 1" as frontendPod1 {
+                component "React/Vue App" as frontendApp1
+                artifact "nginx:alpine" as nginxImg1
+            }
+            node "Frontend Pod 2" as frontendPod2 {
+                component "React/Vue App" as frontendApp2
+                artifact "nginx:alpine" as nginxImg2
+            }
+        }
+        
+        node "Gateway\n:Deployment" as gatewayDeploy {
+            node "Gateway Pod 1" as gatewayPod1 {
+                component "Gateway Service" as gatewaySvc1
+            }
+            node "Gateway Pod 2" as gatewayPod2 {
+                component "Gateway Service" as gatewaySvc2
+            }
+        }
+    }
+    
+    ' 微服务层
+    package "微服务层" as serviceMesh {
+        node "User Service\n:Deployment (Replicas=2)" as userDeploy {
+            node "User Pod 1" as userPod1 {
+                component "User Service" as userSvc1
+            }
+            node "User Pod 2" as userPod2 {
+                component "User Service" as userSvc2
+            }
+        }
+        
+        node "Product Service\n:Deployment (Replicas=2)" as productDeploy {
+            node "Product Pod 1" as productPod1 {
+                component "Product Service" as productSvc1
+            }
+            node "Product Pod 2" as productPod2 {
+                component "Product Service" as productSvc2
+            }
+        }
+        
+        node "Order Service\n:Deployment (Replicas=2)" as orderDeploy {
+            node "Order Pod 1" as orderPod1 {
+                component "Order Service" as orderSvc1
+            }
+            node "Order Pod 2" as orderPod2 {
+                component "Order Service" as orderSvc2
+            }
+        }
+        
+        node "Payment Service\n:Deployment (Replicas=2)" as paymentDeploy {
+            node "Payment Pod 1" as paymentPod1 {
+                component "Payment Service" as paymentSvc1
+            }
+            node "Payment Pod 2" as paymentPod2 {
+                component "Payment Service" as paymentSvc2
+            }
+        }
+    }
+    
+    ' 数据层和中间件层
+    package "数据与中间件层" as dataLayer {
+        node "Nacos\n:StatefulSet" as nacosStateful {
+            database "Nacos Cluster" as nacosDB {
+                artifact "Nacos 2.x" as nacosImg
+            }
+        }
+        
+        node "MySQL\n:StatefulSet" as mysqlStateful {
+            database "MySQL Cluster" as mysqlDB {
+                artifact "MySQL 8.0" as mysqlImg
+            }
+        }
+        
+        node "Redis\n:StatefulSet" as redisStateful {
+            database "Redis Cluster" as redisDB {
+                artifact "Redis 7.0" as redisImg
+            }
+        }
+        
+        node "RabbitMQ\n:StatefulSet" as rabbitmqStateful {
+            node "RabbitMQ Cluster" as rabbitmqCluster {
+                artifact "RabbitMQ 3.x" as rabbitmqImg
+            }
+        }
+    }
+    
+    ' 监控和日志层
+    package "可观测性层" as observabilityLayer {
+        node "Prometheus\n:Deployment" as prometheusDeploy {
+            component "Prometheus" as prometheusComp
+        }
+        
+        node "Grafana\n:Deployment" as grafanaDeploy {
+            component "Grafana" as grafanaComp
+        }
+        
+        node "ELK Stack\n:StatefulSet" as elkStack {
+            component "Elasticsearch" as elastic
+            component "Logstash" as logstash
+            component "Kibana" as kibana
+        }
+        
+        node "Jaeger\n:Deployment" as jaegerDeploy {
+            component "Jaeger" as jaegerComp
+        }
+    }
+}
+
+' 外部服务
+cloud "外部服务" as external {
+    node "第三方支付\n(支付宝/微信)" as payment3rd
+    node "阿里云容器镜像仓库" as registry
+}
+
+' 关系定义 - 流量入口
+endUser -down-> client : "使用"
+client --> ingress : "HTTPS :443"
+
+ingress --> frontendPod1 : "路由: /"
+ingress --> frontendPod2 : "路由: /"
+ingress --> gatewayPod1 : "路由: /api"
+ingress --> gatewayPod2 : "路由: /api"
+
+' 前端到网关
+frontendApp1 ..> gatewaySvc1 : "API调用"
+frontendApp2 ..> gatewaySvc2 : "API调用"
+
+' 网关到微服务
+gatewayPod1 --> userDeploy : "负载均衡"
+gatewayPod1 --> productDeploy : "负载均衡"
+gatewayPod1 --> orderDeploy : "负载均衡"
+gatewayPod1 --> paymentDeploy : "负载均衡"
+
+gatewayPod2 --> userDeploy : "负载均衡"
+gatewayPod2 --> productDeploy : "负载均衡"
+gatewayPod2 --> orderDeploy : "负载均衡"
+gatewayPod2 --> paymentDeploy : "负载均衡"
+
+' 微服务到数据层
+userDeploy --> mysqlDB : "持久化"
+productDeploy --> mysqlDB : "持久化"
+orderDeploy --> mysqlDB : "持久化"
+paymentDeploy --> mysqlDB : "持久化"
+
+userDeploy --> redisDB : "缓存"
+productDeploy --> redisDB : "缓存"
+orderDeploy --> redisDB : "缓存"
+
+userDeploy --> nacosDB : "服务注册"
+productDeploy --> nacosDB : "服务注册"
+orderDeploy --> nacosDB : "服务注册"
+paymentDeploy --> nacosDB : "服务注册"
+gatewayDeploy --> nacosDB : "服务发现"
+
+orderDeploy --> rabbitmqCluster : "消息发布"
+paymentDeploy --> rabbitmqCluster : "消息消费"
+
+' 外部服务依赖
+paymentDeploy --> payment3rd : "支付请求"
+
+' 监控和日志关系
+serviceMesh ..> prometheusComp : "指标上报"
+serviceMesh ..> jaegerComp : "链路追踪"
+serviceMesh ..> elkStack : "日志推送"
+
+prometheusComp --> grafanaComp : "数据源"
+
+' 注释
+note right of k8sCluster
+  **生产环境特点**:
+  • 高可用: 所有服务多副本部署
+  • 自动伸缩: 支持HPA水平扩展
+  • 服务发现: 基于K8s Service
+  • 负载均衡: Ingress + Service自动负载
+  • 健康检查: Liveness & Readiness探针
+  • 滚动更新: 零停机发布
+end note
+
+note top of ingressLayer
+  **Ingress Controller**:
+  统一流量入口，支持:
+  • HTTPS/TLS终止
+  • 域名路由
+  • 限流熔断
+  • IP白名单
+end note
+
+note bottom of serviceMesh
+  **服务网格特点**:
+  • 每个服务2个副本（高可用）
+  • 自动故障转移
+  • 支持金丝雀发布
+  • 服务间通过K8s Service通信
+end note
+
+note bottom of dataLayer
+  **StatefulSet**:
+  用于有状态服务:
+  • 持久化存储(PVC)
+  • 稳定的网络标识
+  • 有序部署和扩展
+end note
+
+note bottom of observabilityLayer
+  **可观测性三大支柱**:
+  • Metrics: Prometheus + Grafana
+  • Logging: ELK Stack
+  • Tracing: Jaeger
+  提供全方位监控和问题排查
+end note
+
+legend right
+  |= 符号说明 |
+  | <size:11>Node: K8s节点/工作负载</size> |
+  | <size:11>Component: 服务组件</size> |
+  | <size:11>Artifact: 容器镜像</size> |
+  | <size:11>Database: 数据存储</size> |
+  | <size:11>Deployment: 无状态工作负载</size> |
+  | <size:11>StatefulSet: 有状态工作负载</size> |
+  | <size:11>实线: 同步通信</size> |
+  | <size:11>虚线: 异步/监控上报</size> |
+endlegend
+
+@enduml
+
+
+

@@ -1,0 +1,152 @@
+@startuml UC9_CreateOrder_Sequence
+
+!theme plain
+
+' ============================
+' 中文字体配置（防止导出时中文乱码）
+' ============================
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+title UC9: 创建订单 - 顺序图 (UML 2.5)
+
+actor User as "用户"
+participant "<<Boundary>>\n:OrderController" as Controller
+participant "<<Control>>\n:OrderService" as OrderService
+participant "<<Entity>>\n:ShoppingCart" as Cart
+participant "<<Entity>>\n:CartItem" as CartItem
+participant "<<Entity>>\n:ShippingAddress" as Address
+participant "<<Control>>\n:InventoryService" as InventoryService
+participant "<<Entity>>\n:Inventory" as Inventory
+participant "<<Entity>>\n:Order" as Order
+participant "<<Entity>>\n:OrderItem" as OrderItem
+
+== 1. 进入订单确认页面 ==
+
+User -> Controller: 点击"去结算"(cartItemIds)
+activate Controller
+
+Controller -> OrderService: prepareOrder(userId, cartItemIds)
+activate OrderService
+
+OrderService -> Cart: getItems(cartItemIds)
+activate Cart
+Cart -> CartItem: getCartItemDetails()
+activate CartItem
+CartItem --> Cart: cartItemList
+deactivate CartItem
+Cart --> OrderService: cartItemList
+deactivate Cart
+
+OrderService -> Address: getDefaultAddress(userId)
+activate Address
+Address --> OrderService: defaultAddress
+deactivate Address
+
+OrderService --> Controller: orderConfirmData
+deactivate OrderService
+
+Controller --> User: 显示订单确认页面
+deactivate Controller
+
+== 2. 用户确认订单信息 ==
+
+User -> Controller: 提交订单(userId, cartItemIds, addressId)
+activate Controller
+
+Controller -> OrderService: createOrder(userId, cartItemIds, addressId)
+activate OrderService
+
+== 3. 校验库存 ==
+
+OrderService -> InventoryService: batchCheckStock(productList)
+activate InventoryService
+
+loop 遍历每个商品
+    InventoryService -> Inventory: checkStock(productId, quantity)
+    activate Inventory
+    Inventory --> InventoryService: stockAvailable
+    deactivate Inventory
+end
+
+InventoryService --> OrderService: stockCheckResult
+deactivate InventoryService
+
+alt 库存不足
+    OrderService --> Controller: 抛出异常(库存不足)
+    Controller --> User: 显示错误提示
+else 库存充足
+    
+    == 4. 创建订单 ==
+    
+    OrderService -> Order: new Order()
+    activate Order
+    Order --> OrderService: order
+    
+    OrderService -> Order: setOrderInfo(userId, addressInfo, totalAmount)
+    
+    OrderService -> Order: generateOrderNumber()
+    Order --> OrderService: orderNumber
+    
+    OrderService -> Order: setStatus(PENDING_PAYMENT)
+    
+    OrderService -> Order: setExpireTime(30分钟)
+    
+    == 5. 创建订单明细 ==
+    
+    loop 遍历购物车项
+        OrderService -> OrderItem: createFromCartItem(cartItem)
+        activate OrderItem
+        OrderItem --> OrderService: orderItem
+        
+        OrderService -> Order: addOrderItem(orderItem)
+        deactivate OrderItem
+    end
+    
+    == 6. 计算订单金额 ==
+    
+    OrderService -> Order: calculateTotalAmount()
+    Order --> OrderService: totalAmount
+    
+    == 7. 预扣库存 ==
+    
+    OrderService -> InventoryService: lockStock(orderNumber, productList)
+    activate InventoryService
+    
+    loop 遍历每个商品
+        InventoryService -> Inventory: lockStock(quantity, orderNumber)
+        activate Inventory
+        Inventory -> Inventory: 使用乐观锁更新
+        Inventory --> InventoryService: lockSuccess
+        deactivate Inventory
+    end
+    
+    InventoryService --> OrderService: allLocked
+    deactivate InventoryService
+    
+    alt 库存锁定失败
+        OrderService -> Order: delete()
+        OrderService --> Controller: 抛出异常(库存锁定失败)
+        Controller --> User: 显示错误提示
+    else 库存锁定成功
+        
+        == 8. 保存订单 ==
+        
+        OrderService -> Order: save()
+        Order --> OrderService: savedOrder
+        deactivate Order
+        
+        OrderService --> Controller: order
+        deactivate OrderService
+        
+        Controller --> User: 跳转支付页面(orderNumber)
+        deactivate Controller
+    end
+end
+
+@enduml
+
+

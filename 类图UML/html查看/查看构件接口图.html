@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>构件接口设计图 - UC9创建订单 & UC10订单支付</title>
+    <script src="https://cdn.jsdelivr.net/npm/plantuml-encoder@1.4.0/dist/plantuml-encoder.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+        
+        .info-box h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        .info-box ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .info-box li {
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .info-box li:last-child {
+            border-bottom: none;
+        }
+        
+        .info-box li strong {
+            color: #495057;
+            display: inline-block;
+            width: 150px;
+        }
+        
+        .diagram-container {
+            text-align: center;
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+        
+        .diagram-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            background: white;
+            padding: 20px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #667eea;
+            font-size: 18px;
+        }
+        
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+        
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .feature-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .feature-card h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .feature-card p {
+            color: #6c757d;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+        
+        .footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #6c757d;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔌 构件接口设计图</h1>
+            <p>UC9创建订单 & UC10订单支付 - 接口关系可视化</p>
+        </div>
+        
+        <div class="content">
+            <div class="info-box">
+                <h3>📋 接口设计说明</h3>
+                <ul>
+                    <li><strong>设计目的：</strong>展示订单构件、支付构件、库存构件之间的接口调用关系</li>
+                    <li><strong>接口类型：</strong>表示层接口（REST API）、业务逻辑层接口、数据访问层接口</li>
+                    <li><strong>外部接口：</strong>第三方支付网关、购物车服务、商品服务、用户服务、消息队列</li>
+                    <li><strong>设计原则：</strong>高内聚、低耦合、接口隔离、依赖倒置</li>
+                </ul>
+            </div>
+            
+            <div class="features">
+                <div class="feature-card">
+                    <h4>🎯 表示层接口</h4>
+                    <p>RESTful API设计，提供HTTP接口供前端调用，包括参数验证、异常处理、响应封装等功能。</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>⚙️ 业务逻辑层接口</h4>
+                    <p>实现核心业务逻辑，包括订单创建、支付处理、库存管理、事务控制、异步消息等。</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>💾 数据访问层接口</h4>
+                    <p>封装数据库操作，提供CRUD接口、乐观锁更新、分页查询、批量操作等功能。</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>🔗 外部系统接口</h4>
+                    <p>与第三方支付网关、微服务、消息队列的集成接口，支持同步调用和异步回调。</p>
+                </div>
+            </div>
+            
+            <div class="diagram-container">
+                <div class="loading">正在加载构件接口图</div>
+                <img id="diagram" style="display:none;" alt="构件接口设计图">
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>💡 提示：图中展示了订单、支付、库存三个构件的接口设计及其相互调用关系</p>
+            <p>📄 详细接口规范请参考《15.接口设计文档.md》</p>
+        </div>
+    </div>
+
+    <script>
+        // PlantUML代码
+        const plantUMLCode = `@startuml ComponentInterface_Diagram
+
+!theme plain
+
+' ============================
+' 中文字体配置
+' ============================
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+skinparam componentStyle rectangle
+skinparam linetype ortho
+
+title 构件接口设计图 - UC9创建订单 & UC10订单支付
+
+' ============================
+' 订单构件
+' ============================
+package "订单构件 (Order Component)" {
+    
+    ' 表示层
+    component "OrderController" as OC {
+        portin "POST /orders" as OC_Create
+        portin "GET /orders/{orderNumber}" as OC_Get
+        portin "PUT /orders/{orderNumber}/cancel" as OC_Cancel
+    }
+    
+    ' 业务逻辑层
+    component "OrderService" as OS {
+        portin "createOrder()" as OS_Create
+        portin "getOrderDetail()" as OS_Get
+        portin "updateOrderStatus()" as OS_Update
+        portin "cancelOrder()" as OS_Cancel
+        portin "handlePaymentSuccess()" as OS_Handle
+    }
+    
+    ' 数据访问层
+    component "OrderRepository" as OR {
+        portin "save()" as OR_Save
+        portin "findByOrderNumber()" as OR_Find
+        portin "update()" as OR_Update
+        portin "findExpiredOrders()" as OR_Expired
+    }
+    
+    OC --> OS : 调用
+    OS --> OR : 调用
+}
+
+' ============================
+' 支付构件
+' ============================
+package "支付构件 (Payment Component)" {
+    
+    ' 表示层
+    component "PaymentController" as PC {
+        portin "POST /payments" as PC_Create
+        portin "POST /payments/callback/alipay" as PC_Alipay
+        portin "POST /payments/callback/wechat" as PC_Wechat
+        portin "GET /payments/{paymentNumber}/status" as PC_Status
+    }
+    
+    ' 业务逻辑层
+    component "PaymentService" as PS {
+        portin "createPaymentOrder()" as PS_Create
+        portin "getPaymentStatus()" as PS_Status
+        portin "handlePaymentCallback()" as PS_Callback
+    }
+    
+    component "PaymentCallbackHandler" as PCH {
+        portin "handlePaymentSuccess()" as PCH_Success
+        portin "handlePaymentFailed()" as PCH_Failed
+        portin "verifySignature()" as PCH_Verify
+    }
+    
+    ' 数据访问层
+    component "PaymentOrderRepository" as PR {
+        portin "save()" as PR_Save
+        portin "findByPaymentNumber()" as PR_Find
+        portin "update()" as PR_Update
+        portin "findExpiredPayments()" as PR_Expired
+    }
+    
+    component "PaymentRecordRepository" as PRR {
+        portin "save()" as PRR_Save
+        portin "findByPaymentNumber()" as PRR_Find
+    }
+    
+    PC --> PS : 调用
+    PS --> PCH : 调用
+    PS --> PR : 调用
+    PCH --> PRR : 调用
+}
+
+' ============================
+' 库存构件
+' ============================
+package "库存构件 (Inventory Component)" {
+    
+    ' 业务逻辑层
+    component "InventoryService" as IS {
+        portin "batchCheckStock()" as IS_Check
+        portin "lockStock()" as IS_Lock
+        portin "deductStock()" as IS_Deduct
+        portin "releaseStock()" as IS_Release
+    }
+    
+    ' 数据访问层
+    component "InventoryRepository" as IR {
+        portin "findByProductId()" as IR_Find
+        portin "updateWithOptimisticLock()" as IR_Update
+        portin "findByProductIds()" as IR_Batch
+    }
+    
+    IS --> IR : 调用
+}
+
+' ============================
+' 外部系统
+' ============================
+cloud "外部系统" {
+    component "支付宝网关" as Alipay {
+        portin "processPayment()" as Alipay_Pay
+        portout "paymentCallback()" as Alipay_Callback
+    }
+    
+    component "微信支付网关" as Wechat {
+        portin "processPayment()" as Wechat_Pay
+        portout "paymentCallback()" as Wechat_Callback
+    }
+    
+    component "购物车服务" as Cart {
+        portout "getCartItems()" as Cart_Get
+        portin "clearPaidItems()" as Cart_Clear
+    }
+    
+    component "商品服务" as Product {
+        portout "getProductDetails()" as Product_Get
+    }
+    
+    component "用户服务" as User {
+        portout "getUserAddresses()" as User_Get
+    }
+}
+
+' ============================
+' 消息队列
+' ============================
+queue "RabbitMQ" as MQ {
+    portin "publish(payment.success)" as MQ_Pub
+    portout "consume(payment.success.queue)" as MQ_Sub
+}
+
+' ============================
+' 数据库
+' ============================
+database "MySQL" {
+    component "order_db" as OrderDB {
+        portin "orders表" as OrderDB_Orders
+        portin "order_items表" as OrderDB_Items
+    }
+    
+    component "payment_db" as PaymentDB {
+        portin "payment_orders表" as PaymentDB_Orders
+        portin "payment_records表" as PaymentDB_Records
+    }
+    
+    component "product_db" as ProductDB {
+        portin "inventory表" as ProductDB_Inventory
+    }
+}
+
+' ============================
+' 构件间接口调用关系
+' ============================
+
+' 订单服务调用库存服务
+OS ..> IS : <<需要>>\\nbatchCheckStock()\\nlockStock()
+
+' 订单服务调用外部服务
+OS ..> Cart_Get : <<需要>>\\ngetCartItems()
+OS ..> Product_Get : <<需要>>\\ngetProductDetails()
+OS ..> User_Get : <<需要>>\\ngetUserAddresses()
+OS ..> Cart_Clear : <<需要>>\\nclearPaidItems()
+
+' 支付服务调用订单服务
+PS ..> OS_Get : <<需要>>\\ngetOrderDetail()
+PCH ..> OS_Update : <<需要>>\\nupdateOrderStatus()
+PCH ..> OS_Cancel : <<需要>>\\ncancelOrder()
+
+' 支付服务调用库存服务
+PCH ..> IS_Deduct : <<需要>>\\ndeductStock()
+PCH ..> IS_Release : <<需要>>\\nreleaseStock()
+
+' 支付服务调用第三方支付
+PS ..> Alipay_Pay : <<需要>>\\nprocessPayment()
+PS ..> Wechat_Pay : <<需要>>\\nprocessPayment()
+
+' 第三方支付回调
+Alipay_Callback ..> PC_Alipay : <<回调>>
+Wechat_Callback ..> PC_Wechat : <<回调>>
+
+' 消息队列
+PCH ..> MQ_Pub : <<发布>>\\npayment.success
+MQ_Sub ..> OS_Handle : <<消费>>
+
+' 数据访问层访问数据库
+OR --> OrderDB_Orders : SQL
+OR --> OrderDB_Items : SQL
+PR --> PaymentDB_Orders : SQL
+PRR --> PaymentDB_Records : SQL
+IR --> ProductDB_Inventory : SQL
+
+' ============================
+' 图例
+' ============================
+legend right
+    |= 符号 |= 说明 |
+    | ──> | 同步调用 |
+    | ..> | 异步调用/需求接口 |
+    | <<需要>> | 需求接口 |
+    | <<回调>> | 回调接口 |
+    | <<发布>> | 消息发布 |
+    | <<消费>> | 消息消费 |
+endlegend
+
+note right of OC
+    **表示层接口**
+    - RESTful API
+    - 参数验证
+    - 异常处理
+    - 响应封装
+end note
+
+note right of OS
+    **业务逻辑层接口**
+    - 业务规则
+    - 事务管理
+    - 分布式事务
+    - 异步消息
+end note
+
+note right of OR
+    **数据访问层接口**
+    - CRUD操作
+    - 乐观锁
+    - 分页查询
+    - 批量操作
+end note
+
+@enduml`;
+
+        // 编码PlantUML代码
+        const encoded = plantumlEncoder.encode(plantUMLCode);
+        
+        // 生成图片URL
+        const imgUrl = 'https://www.plantuml.com/plantuml/svg/' + encoded;
+        
+        // 加载图片
+        const img = document.getElementById('diagram');
+        const loading = document.querySelector('.loading');
+        
+        img.onload = function() {
+            loading.style.display = 'none';
+            img.style.display = 'block';
+        };
+        
+        img.onerror = function() {
+            loading.innerHTML = '❌ 图片加载失败，请检查网络连接或稍后重试';
+            loading.style.color = '#dc3545';
+        };
+        
+        img.src = imgUrl;
+    </script>
+</body>
+</html>

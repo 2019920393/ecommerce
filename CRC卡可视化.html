@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UC9 & UC10 CRC卡可视化</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 20px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: rgba(255,255,255,0.9);
+            margin-bottom: 40px;
+            font-size: 1.2em;
+        }
+        
+        .category {
+            margin-bottom: 50px;
+        }
+        
+        .category-title {
+            color: white;
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 25px;
+        }
+        
+        .crc-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            animation: fadeIn 0.5s ease;
+        }
+        
+        .crc-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .card-header {
+            padding: 20px;
+            text-align: center;
+            color: white;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        
+        .card-header.entity {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .card-header.enum {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .card-header.control {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        
+        .card-body {
+            display: flex;
+            min-height: 300px;
+        }
+        
+        .responsibilities {
+            flex: 1;
+            padding: 20px;
+            border-right: 2px solid #e0e0e0;
+            background: #f9f9f9;
+        }
+        
+        .collaborators {
+            flex: 1;
+            padding: 20px;
+            background: #ffffff;
+        }
+        
+        .section-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #667eea;
+        }
+        
+        .responsibilities .section-title {
+            border-bottom-color: #667eea;
+        }
+        
+        .collaborators .section-title {
+            border-bottom-color: #f5576c;
+        }
+        
+        .item-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .item-list li {
+            padding: 8px 0;
+            padding-left: 20px;
+            position: relative;
+            color: #555;
+            line-height: 1.6;
+        }
+        
+        .item-list li:before {
+            content: "▸";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+        
+        .collaborators .item-list li:before {
+            color: #f5576c;
+        }
+        
+        .stats {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .stats h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            text-align: center;
+        }
+        
+        .stat-item {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+        }
+        
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .stat-label {
+            font-size: 1em;
+            opacity: 0.9;
+        }
+        
+        .filter-buttons {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .filter-btn {
+            padding: 10px 25px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 25px;
+            background: white;
+            color: #667eea;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        .filter-btn:hover, .filter-btn.active {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        
+        @media (max-width: 768px) {
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 1.8em;
+            }
+            
+            .card-body {
+                flex-direction: column;
+            }
+            
+            .responsibilities {
+                border-right: none;
+                border-bottom: 2px solid #e0e0e0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📋 UC9 & UC10 CRC卡可视化</h1>
+        <p class="subtitle">云原生微服务电商平台 - 静态模型建模</p>
+        
+        <div class="stats">
+            <h2>📊 统计信息</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-number">17</div>
+                    <div class="stat-label">总类数</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">10</div>
+                    <div class="stat-label">实体类</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">3</div>
+                    <div class="stat-label">枚举类</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">4</div>
+                    <div class="stat-label">控制类</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">3.5</div>
+                    <div class="stat-label">平均协作者</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="filter-buttons">
+            <button class="filter-btn active" onclick="filterCards('all')">全部</button>
+            <button class="filter-btn" onclick="filterCards('entity')">实体类</button>
+            <button class="filter-btn" onclick="filterCards('enum')">枚举类</button>
+            <button class="filter-btn" onclick="filterCards('control')">控制类</button>
+        </div>
+        
+        <!-- 实体类 -->
+        <div class="category" data-category="entity">
+            <h2 class="category-title">📦 实体类 (Entity Classes)</h2>
+            <div class="cards-grid">
+                
+                <!-- User -->
+                <div class="crc-card">
+                    <div class="card-header entity">User（用户）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>存储用户基本信息</li>
+                                <li>管理用户账号和密码</li>
+                                <li>验证用户身份</li>
+                                <li>提供用户注册和登录</li>
+                                <li>更新用户个人资料</li>
+                                <li>判断用户角色和状态</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>Order</li>
+                                <li>ShoppingCart</li>
+                                <li>ShippingAddress</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Order -->
+                <div class="crc-card">
+                    <div class="card-header entity">Order（订单）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>存储订单信息</li>
+                                <li>管理订单状态</li>
+                                <li>计算订单总金额</li>
+                                <li>记录订单时间信息</li>
+                                <li>处理订单取消</li>
+                                <li>判断订单是否可支付/取消</li>
+                                <li>维护订单与订单明细的关系</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>User</li>
+                                <li>OrderItem</li>
+                                <li>PaymentOrder</li>
+                                <li>OrderStatus</li>
+                                <li>ShippingAddress</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- OrderItem -->
+                <div class="crc-card">
+                    <div class="card-header entity">OrderItem（订单明细）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>存储订单中的商品信息</li>
+                                <li>记录商品快照数据</li>
+                                <li>计算商品小计金额</li>
+                                <li>从购物车项创建订单明细</li>
+                                <li>从商品创建订单明细</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>Order</li>
+                                <li>Product</li>
+                                <li>CartItem</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Product -->
+                <div class="crc-card">
+                    <div class="card-header entity">Product（商品）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>存储商品基本信息</li>
+                                <li>管理商品价格和规格</li>
+                                <li>提供商品详情</li>
+                                <li>判断商品是否可购买</li>
+                                <li>判断库存是否充足</li>
+                                <li>更新商品库存和销量</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>Inventory</li>
+                                <li>CartItem</li>
+                                <li>OrderItem</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- ShoppingCart -->
+                <div class="crc-card">
+                    <div class="card-header entity">ShoppingCart（购物车）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>存储用户待购买商品</li>
+                                <li>管理购物车项</li>
+                                <li>添加/删除/更新购物车项</li>
+                                <li>计算购物车总价</li>
+                                <li>获取购物车商品数量</li>
+                                <li>清空购物车</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>User</li>
+                                <li>CartItem</li>
+                                <li>Product</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- CartItem -->
+                <div class="crc-card">
+                    <div class="card-header entity">CartItem（购物车项）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>存储购物车中的单个商品</li>
+                                <li>记录商品快照价格</li>
+                                <li>管理商品数量和选中状态</li>
+                                <li>计算商品小计</li>
+                                <li>判断商品是否过期</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>ShoppingCart</li>
+                                <li>Product</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- ShippingAddress -->
+                <div class="crc-card">
+                    <div class="card-header entity">ShippingAddress（收货地址）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>存储用户收货地址信息</li>
+                                <li>管理地址的增删改</li>
+                                <li>设置默认地址</li>
+                                <li>提供完整地址字符串</li>
+                                <li>验证地址信息完整性</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>User</li>
+                                <li>Order</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Inventory -->
+                <div class="crc-card">
+                    <div class="card-header entity">Inventory（库存）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>存储商品库存信息</li>
+                                <li>管理总库存和可用库存</li>
+                                <li>检查库存是否充足</li>
+                                <li>锁定库存（预扣）</li>
+                                <li>实际扣减库存</li>
+                                <li>释放预扣库存</li>
+                                <li>使用乐观锁处理并发</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>Product</li>
+                                <li>InventoryService</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- PaymentOrder -->
+                <div class="crc-card">
+                    <div class="card-header entity">PaymentOrder（支付订单）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>存储支付订单信息</li>
+                                <li>生成支付流水号</li>
+                                <li>管理支付状态</li>
+                                <li>记录支付方式和金额</li>
+                                <li>判断是否可支付</li>
+                                <li>判断是否过期</li>
+                                <li>记录支付结果</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>Order</li>
+                                <li>PaymentRecord</li>
+                                <li>PaymentStatus</li>
+                                <li>PaymentMethod</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- PaymentRecord -->
+                <div class="crc-card">
+                    <div class="card-header entity">PaymentRecord（支付记录）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>记录所有支付操作</li>
+                                <li>存储支付详情</li>
+                                <li>提供支付历史查询</li>
+                                <li>支持对账和审计</li>
+                                <li>记录第三方交易信息</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>PaymentOrder</li>
+                                <li>PaymentStatus</li>
+                                <li>PaymentMethod</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+        
+        <!-- 枚举类 -->
+        <div class="category" data-category="enum">
+            <h2 class="category-title">🏷️ 枚举类 (Enum Classes)</h2>
+            <div class="cards-grid">
+                
+                <!-- OrderStatus -->
+                <div class="crc-card">
+                    <div class="card-header enum">OrderStatus（订单状态）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>定义订单的5种状态</li>
+                                <li>提供状态码和描述</li>
+                                <li>判断状态是否可转换</li>
+                                <li>根据状态码获取枚举值</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>Order</li>
+                                <li>OrderService</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- PaymentStatus -->
+                <div class="crc-card">
+                    <div class="card-header enum">PaymentStatus（支付状态）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>定义支付的3种状态</li>
+                                <li>提供状态码和描述</li>
+                                <li>判断支付是否成功</li>
+                                <li>判断支付是否失败</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>PaymentOrder</li>
+                                <li>PaymentRecord</li>
+                                <li>PaymentService</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- PaymentMethod -->
+                <div class="crc-card">
+                    <div class="card-header enum">PaymentMethod（支付方式）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>定义4种支付方式</li>
+                                <li>提供方式码和描述</li>
+                                <li>判断是否为模拟支付</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>PaymentOrder</li>
+                                <li>PaymentRecord</li>
+                                <li>PaymentService</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+        
+        <!-- 控制类 -->
+        <div class="category" data-category="control">
+            <h2 class="category-title">🎮 控制类 (Control Classes)</h2>
+            <div class="cards-grid">
+                
+                <!-- OrderService -->
+                <div class="crc-card">
+                    <div class="card-header control">OrderService（订单服务）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>协调订单创建流程</li>
+                                <li>校验订单信息</li>
+                                <li>调用库存服务检查库存</li>
+                                <li>调用购物车服务获取商品</li>
+                                <li>管理订单状态流转</li>
+                                <li>处理订单取消</li>
+                                <li>提供订单查询功能</li>
+                                <li>定时检查超时订单</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>Order</li>
+                                <li>OrderItem</li>
+                                <li>User</li>
+                                <li>ShippingAddress</li>
+                                <li>InventoryService</li>
+                                <li>ShoppingCart</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- InventoryService -->
+                <div class="crc-card">
+                    <div class="card-header control">InventoryService（库存服务）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>检查商品库存是否充足</li>
+                                <li>批量检查多个商品库存</li>
+                                <li>锁定库存（预扣）</li>
+                                <li>实际扣减库存</li>
+                                <li>释放预扣库存</li>
+                                <li>更新商品库存数量</li>
+                                <li>处理乐观锁重试</li>
+                                <li>定时释放超时锁</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>Inventory</li>
+                                <li>Product</li>
+                                <li>OrderService</li>
+                                <li>PaymentCallbackHandler</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- PaymentService -->
+                <div class="crc-card">
+                    <div class="card-header control">PaymentService（支付服务）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>创建支付订单</li>
+                                <li>处理支付请求</li>
+                                <li>模拟支付流程</li>
+                                <li>查询支付状态</li>
+                                <li>记录支付历史</li>
+                                <li>支持支付重试</li>
+                                <li>提供支付记录查询</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>PaymentOrder</li>
+                                <li>PaymentRecord</li>
+                                <li>Order</li>
+                                <li>OrderService</li>
+                                <li>PaymentCallbackHandler</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- PaymentCallbackHandler -->
+                <div class="crc-card">
+                    <div class="card-header control">PaymentCallbackHandler（支付回调处理器）</div>
+                    <div class="card-body">
+                        <div class="responsibilities">
+                            <div class="section-title">职责 (Responsibilities)</div>
+                            <ul class="item-list">
+                                <li>处理支付结果回调</li>
+                                <li>协调支付成功后的操作</li>
+                                <li>更新订单状态</li>
+                                <li>扣减商品库存</li>
+                                <li>清空购物车</li>
+                                <li>生成支付记录</li>
+                                <li>触发发货通知</li>
+                                <li>处理支付失败回滚</li>
+                                <li>通知用户支付结果</li>
+                            </ul>
+                        </div>
+                        <div class="collaborators">
+                            <div class="section-title">协作者 (Collaborators)</div>
+                            <ul class="item-list">
+                                <li>PaymentService</li>
+                                <li>OrderService</li>
+                                <li>InventoryService</li>
+                                <li>ShoppingCart</li>
+                                <li>PaymentOrder</li>
+                                <li>Order</li>
+                                <li>Inventory</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+        
+    </div>
+    
+    <script>
+        function filterCards(category) {
+            const categories = document.querySelectorAll('.category');
+            const buttons = document.querySelectorAll('.filter-btn');
+            
+            // 更新按钮状态
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // 过滤卡片
+            if (category === 'all') {
+                categories.forEach(cat => cat.style.display = 'block');
+            } else {
+                categories.forEach(cat => {
+                    if (cat.dataset.category === category) {
+                        cat.style.display = 'block';
+                    } else {
+                        cat.style.display = 'none';
+                    }
+                });
+            }
+        }
+        
+        // 添加打印功能
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+                window.print();
+            }
+        });
+    </script>
+</body>
+</html>
+
+
+

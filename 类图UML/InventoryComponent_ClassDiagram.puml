@@ -1,0 +1,172 @@
+@startuml InventoryComponent_ClassDiagram
+
+!theme plain
+
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+title 库存构件内部类图
+
+' ============================
+' 业务逻辑层
+' ============================
+package "业务逻辑层 (Business Logic Layer)" {
+    class InventoryService <<Control>> {
+        - inventoryRepository: InventoryRepository
+        - inventoryLockRepository: InventoryLockRepository
+        + batchCheckStock(productList: List<ProductQuantity>): StockCheckResult
+        + lockStock(orderNumber: String, productList: List<ProductQuantity>): StockLockResult
+        + deductStock(orderNumber: String): StockDeductResult
+        + releaseStock(orderNumber: String): StockReleaseResult
+        - validateStockAvailability(inventory: Inventory, quantity: Integer): boolean
+    }
+}
+
+' ============================
+' 领域层
+' ============================
+package "领域层 (Domain Layer)" {
+    class Inventory <<Entity>> {
+        - id: Long
+        - productId: Long
+        - totalStock: Integer
+        - availableStock: Integer
+        - lockedStock: Integer
+        - version: Integer
+        - createTime: LocalDateTime
+        - updateTime: LocalDateTime
+        + checkStock(quantity: Integer): boolean
+        + lockStock(quantity: Integer, orderNumber: String): boolean
+        + deductLockedStock(orderNumber: String): boolean
+        + releaseLockedStock(orderNumber: String): boolean
+        + getAvailableStock(): Integer
+    }
+    
+    class InventoryLock <<Entity>> {
+        - id: Long
+        - productId: Long
+        - orderNumber: String
+        - lockedQuantity: Integer
+        - lockStatus: LockStatus
+        - lockTime: LocalDateTime
+        - releaseTime: LocalDateTime
+        + release(): void
+        + isExpired(): boolean
+    }
+    
+    enum LockStatus <<Enumeration>> {
+        LOCKED
+        DEDUCTED
+        RELEASED
+    }
+    
+    class ProductQuantity <<Value Object>> {
+        - productId: Long
+        - quantity: Integer
+        + getProductId(): Long
+        + getQuantity(): Integer
+    }
+    
+    class StockCheckResult <<Value Object>> {
+        - success: boolean
+        - insufficientProducts: List<InsufficientProduct>
+        + isSuccess(): boolean
+        + getInsufficientProducts(): List<InsufficientProduct>
+    }
+    
+    class StockLockResult <<Value Object>> {
+        - success: boolean
+        - lockedProducts: List<ProductQuantity>
+        - failedProducts: List<ProductQuantity>
+        + isSuccess(): boolean
+    }
+    
+    class StockDeductResult <<Value Object>> {
+        - success: boolean
+        - deductedProducts: List<ProductQuantity>
+        + isSuccess(): boolean
+    }
+    
+    class StockReleaseResult <<Value Object>> {
+        - success: boolean
+        - releasedProducts: List<ProductQuantity>
+        + isSuccess(): boolean
+    }
+}
+
+' ============================
+' 数据访问层
+' ============================
+package "数据访问层 (Data Access Layer)" {
+    interface InventoryRepository <<Repository>> {
+        + findByProductId(productId: Long): Inventory
+        + findByProductIds(productIds: List<Long>): List<Inventory>
+        + updateWithOptimisticLock(inventory: Inventory): int
+        + save(inventory: Inventory): Inventory
+    }
+    
+    class InventoryRepositoryImpl <<Repository>> {
+        - inventoryMapper: InventoryMapper
+        + findByProductId(productId: Long): Inventory
+        + findByProductIds(productIds: List<Long>): List<Inventory>
+        + updateWithOptimisticLock(inventory: Inventory): int
+        + save(inventory: Inventory): Inventory
+    }
+    
+    interface InventoryLockRepository <<Repository>> {
+        + save(lock: InventoryLock): InventoryLock
+        + findByOrderNumber(orderNumber: String): List<InventoryLock>
+        + updateStatus(lockId: Long, status: LockStatus): void
+        + findExpiredLocks(expireTime: LocalDateTime): List<InventoryLock>
+    }
+    
+    class InventoryLockRepositoryImpl <<Repository>> {
+        - inventoryLockMapper: InventoryLockMapper
+        + save(lock: InventoryLock): InventoryLock
+        + findByOrderNumber(orderNumber: String): List<InventoryLock>
+        + updateStatus(lockId: Long, status: LockStatus): void
+        + findExpiredLocks(expireTime: LocalDateTime): List<InventoryLock>
+    }
+    
+    interface InventoryMapper <<Mapper>> {
+        + selectByProductId(productId: Long): Inventory
+        + selectByProductIds(productIds: List<Long>): List<Inventory>
+        + updateWithVersion(inventory: Inventory): int
+        + insert(inventory: Inventory): int
+    }
+    
+    interface InventoryLockMapper <<Mapper>> {
+        + insert(lock: InventoryLock): int
+        + selectByOrderNumber(orderNumber: String): List<InventoryLock>
+        + updateStatus(lockId: Long, status: String): int
+        + selectExpiredLocks(expireTime: LocalDateTime): List<InventoryLock>
+    }
+}
+
+' ============================
+' 关系
+' ============================
+
+' 业务逻辑层依赖领域层
+InventoryService --> Inventory
+InventoryService --> InventoryLock
+InventoryService ..> ProductQuantity
+InventoryService ..> StockCheckResult
+InventoryService ..> StockLockResult
+InventoryService ..> StockDeductResult
+InventoryService ..> StockReleaseResult
+
+' 业务逻辑层依赖数据访问层
+InventoryService --> InventoryRepository
+InventoryService --> InventoryLockRepository
+
+' 领域层关系
+InventoryLock --> LockStatus
+
+' 数据访问层实现
+InventoryRepositoryImpl ..|> InventoryRepository
+InventoryRepositoryImpl --> InventoryMapper
+InventoryLockRepositoryImpl ..|> InventoryLockRepository
+InventoryLockRepositoryImpl --> InventoryLockMapper
+
+@enduml

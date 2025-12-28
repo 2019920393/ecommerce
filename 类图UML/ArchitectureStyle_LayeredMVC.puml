@@ -1,0 +1,218 @@
+@startuml 订单服务与支付服务架构风格图_分层架构+MVC
+' 设置中文字体支持
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+' 设置样式
+skinparam package {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  BorderThickness 2
+  FontSize 11
+  FontStyle bold
+}
+
+skinparam component {
+  BackgroundColor #FFFFFF
+  BorderColor #424242
+  BorderThickness 1
+  FontSize 10
+}
+
+skinparam rectangle {
+  BackgroundColor #FFF9C4
+  BorderColor #F57C00
+  BorderThickness 2
+  FontSize 11
+  FontStyle bold
+}
+
+skinparam shadowing false
+skinparam backgroundColor #FEFEFE
+
+' 标题
+title 订单服务与支付服务架构风格图\n分层架构 (Layered Architecture) + MVC模式
+center footer 架构风格: 分层架构 | 设计模式: MVC (Model-View-Controller) | 前后端分离
+
+' ========================================
+' 订单服务 - 分层架构
+' ========================================
+package "订单服务 (Order Service)\n端口: 8083" as OrderService {
+  
+  ' 表示层 (Presentation Layer)
+  rectangle "表示层\n(Presentation Layer)" as OrderPresentation #FFE0B2 {
+    component "<<Controller>>\nOrderController" as OrderController {
+      portin "REST API"
+    }
+    component "<<DTO>>\nCreateOrderRequest" as OrderRequest
+    component "<<DTO>>\nCreateOrderResponse" as OrderResponse
+    component "<<DTO>>\nOrderDTO" as OrderDTO
+  }
+  
+  ' 业务逻辑层 (Business Logic Layer)
+  rectangle "业务逻辑层\n(Business Logic Layer)" as OrderBusiness #FFCC80 {
+    component "<<Service>>\nOrderService" as OrderServiceImpl {
+      note right
+        **核心业务逻辑**
+        - 订单创建
+        - 订单状态更新
+        - 业务规则校验
+        - 分布式事务协调
+      end note
+    }
+    component "<<Service>>\nInventoryClient" as InventoryClient
+    component "<<Service>>\nCartClient" as CartClient
+  }
+  
+  ' 数据访问层 (Data Access Layer)
+  rectangle "数据访问层\n(Data Access Layer)" as OrderData #FFB74D {
+    component "<<Repository>>\nOrderRepository" as OrderRepo
+    component "<<Repository>>\nOrderItemRepository" as OrderItemRepo
+    component "<<Entity>>\nOrder" as OrderEntity
+    component "<<Entity>>\nOrderItem" as OrderItemEntity
+  }
+  
+  ' 层间依赖关系
+  OrderController -down-> OrderServiceImpl : 调用
+  OrderController -down-> OrderRequest : 使用
+  OrderController -down-> OrderResponse : 使用
+  OrderController -down-> OrderDTO : 使用
+  
+  OrderServiceImpl -down-> OrderRepo : 调用
+  OrderServiceImpl -down-> OrderItemRepo : 调用
+  OrderServiceImpl -right-> InventoryClient : 调用外部服务
+  OrderServiceImpl -right-> CartClient : 调用外部服务
+  
+  OrderRepo -down-> OrderEntity : 操作
+  OrderItemRepo -down-> OrderItemEntity : 操作
+}
+
+' ========================================
+' 支付服务 - 分层架构
+' ========================================
+package "支付服务 (Payment Service)\n端口: 8084" as PaymentService {
+  
+  ' 表示层 (Presentation Layer)
+  rectangle "表示层\n(Presentation Layer)" as PaymentPresentation #E1BEE7 {
+    component "<<Controller>>\nPaymentController" as PaymentController {
+      portin "REST API"
+    }
+    component "<<Handler>>\nPaymentCallbackHandler" as CallbackHandler {
+      portin "Webhook"
+    }
+    component "<<DTO>>\nCreatePaymentRequest" as PaymentRequest
+    component "<<DTO>>\nPaymentResponse" as PaymentResponse
+    component "<<DTO>>\nPaymentDTO" as PaymentDTO
+  }
+  
+  ' 业务逻辑层 (Business Logic Layer)
+  rectangle "业务逻辑层\n(Business Logic Layer)" as PaymentBusiness #CE93D8 {
+    component "<<Service>>\nPaymentService" as PaymentServiceImpl {
+      note right
+        **核心业务逻辑**
+        - 支付订单创建
+        - 支付处理
+        - 回调处理
+        - 状态管理
+      end note
+    }
+    component "<<Service>>\nOrderClient" as OrderClient
+    component "<<Service>>\nThirdPartyPaymentClient" as ThirdPartyClient
+    component "<<Service>>\nMessageProducer" as MessageProducer
+  }
+  
+  ' 数据访问层 (Data Access Layer)
+  rectangle "数据访问层\n(Data Access Layer)" as PaymentData #BA68C8 {
+    component "<<Repository>>\nPaymentOrderRepository" as PaymentRepo
+    component "<<Repository>>\nPaymentRecordRepository" as RecordRepo
+    component "<<Entity>>\nPaymentOrder" as PaymentEntity
+    component "<<Entity>>\nPaymentRecord" as RecordEntity
+  }
+  
+  ' 层间依赖关系
+  PaymentController -down-> PaymentServiceImpl : 调用
+  CallbackHandler -down-> PaymentServiceImpl : 调用
+  PaymentController -down-> PaymentRequest : 使用
+  PaymentController -down-> PaymentResponse : 使用
+  PaymentController -down-> PaymentDTO : 使用
+  
+  PaymentServiceImpl -down-> PaymentRepo : 调用
+  PaymentServiceImpl -down-> RecordRepo : 调用
+  PaymentServiceImpl -right-> OrderClient : 调用外部服务
+  PaymentServiceImpl -right-> ThirdPartyClient : 调用第三方
+  PaymentServiceImpl -right-> MessageProducer : 发送消息
+  
+  PaymentRepo -down-> PaymentEntity : 操作
+  RecordRepo -down-> RecordEntity : 操作
+}
+
+' ========================================
+' 外部依赖
+' ========================================
+database "MySQL\n(order_db)" as OrderDB #FFF9C4
+database "MySQL\n(payment_db)" as PaymentDB #FFF9C4
+component "RabbitMQ\n(消息队列)" as MQ #C5E1A5
+component "商品服务\n(Product Service)" as ProductService #90EE90
+component "购物车服务\n(Cart Service)" as CartService #90EE90
+component "第三方支付\n(Alipay/WeChat)" as ThirdParty #FFCCBC
+
+' 数据访问层连接数据库
+OrderRepo -down-> OrderDB : JDBC
+OrderItemRepo -down-> OrderDB : JDBC
+PaymentRepo -down-> PaymentDB : JDBC
+RecordRepo -down-> PaymentDB : JDBC
+
+' 服务间调用
+InventoryClient -right-> ProductService : HTTP/OpenFeign
+CartClient -right-> CartService : HTTP/OpenFeign
+OrderClient -left-> OrderService : HTTP/OpenFeign
+ThirdPartyClient -right-> ThirdParty : HTTPS
+MessageProducer -down-> MQ : AMQP
+
+' ========================================
+' 架构风格说明
+' ========================================
+note as N1
+  **分层架构原则**
+  1. 上层可以调用下层，下层不能调用上层
+  2. 每层只能与相邻层交互
+  3. 跨层调用必须有充分理由
+  
+  **MVC模式**
+  - Controller: 处理HTTP请求，参数验证
+  - Model (DTO): 数据传输对象
+  - Service: 业务逻辑处理（无View层，前后端分离）
+  
+  **职责分离**
+  - 表示层: 请求处理、响应封装
+  - 业务逻辑层: 业务规则、流程控制
+  - 数据访问层: 数据持久化、CRUD操作
+end note
+
+' ========================================
+' 图例
+' ========================================
+legend right
+  **架构风格**
+  |= 风格 |= 说明 |
+  | 分层架构 | 三层架构：表示层、业务逻辑层、数据访问层 |
+  | MVC模式 | Controller + DTO (无View，前后端分离) |
+  
+  **组件类型**
+  |= 标记 |= 说明 |
+  | <<Controller>> | 控制器，处理HTTP请求 |
+  | <<Handler>> | 处理器，处理回调/事件 |
+  | <<Service>> | 服务类，业务逻辑 |
+  | <<Repository>> | 仓储类，数据访问 |
+  | <<Entity>> | 实体类，领域模型 |
+  | <<DTO>> | 数据传输对象 |
+  
+  **技术栈**
+  - Spring Boot 3.x
+  - Spring MVC (RESTful API)
+  - MyBatis-Plus (ORM)
+  - OpenFeign (服务调用)
+  - RabbitMQ (消息队列)
+end legend
+
+@enduml

@@ -1,0 +1,362 @@
+@startuml UC10_Refined_Sequence
+
+!theme plain
+
+' ============================
+' 中文字体配置
+' ============================
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+title UC10: 订单支付 - 精化后的顺序图（基于分层架构+MVC模式）
+
+actor User as "用户"
+participant "<<Boundary>>\n:PaymentController" as Controller
+participant "<<DTO>>\n:CreatePaymentRequest" as Request
+participant "<<Control>>\n:PaymentService" as PaymentService
+participant "<<Control>>\n:PaymentCallbackHandler" as CallbackHandler
+participant "<<Control>>\n:OrderService" as OrderService
+participant "<<Control>>\n:InventoryService" as InventoryService
+participant "<<Entity>>\n:PaymentOrder" as PaymentOrder
+participant "<<Entity>>\n:Order" as Order
+participant "<<Entity>>\n:Inventory" as Inventory
+participant "<<Entity>>\n:PaymentRecord" as Record
+participant "<<Repository>>\n:PaymentOrderRepository" as PaymentRepo
+participant "<<Repository>>\n:OrderRepository" as OrderRepo
+participant "<<Repository>>\n:InventoryRepository" as InventoryRepo
+participant "<<Repository>>\n:PaymentRecordRepository" as RecordRepo
+participant "<<DTO>>\n:PaymentResponse" as Response
+participant "<<External>>\n:PaymentGateway" as Gateway
+queue "RabbitMQ\npayment.exchange" as MQ
+database "MySQL\npayment_db" as PaymentDB
+database "MySQL\norder_db" as OrderDB
+database "MySQL\nproduct_db" as ProductDB
+
+== 1. 用户进入支付页面 ==
+
+User -> Controller: GET /payments/page?orderNumber=xxx
+activate Controller
+
+Controller -> PaymentService: getOrderForPayment(orderNumber)
+activate PaymentService
+
+PaymentService -> OrderService: getOrderDetail(orderNumber)
+activate OrderService
+OrderService -> OrderRepo: findByOrderNumber(orderNumber)
+activate OrderRepo
+OrderRepo -> OrderDB: SELECT * FROM orders\nWHERE order_number = ?
+activate OrderDB
+OrderDB --> OrderRepo: order_data
+deactivate OrderDB
+OrderRepo --> OrderService: order
+deactivate OrderRepo
+
+OrderService -> Order: isPaid()
+activate Order
+Order --> OrderService: false
+deactivate Order
+
+OrderService -> Order: isExpired()
+activate Order
+Order --> OrderService: false
+deactivate Order
+
+OrderService --> PaymentService: order
+deactivate OrderService
+
+PaymentService --> Controller: paymentPageData
+deactivate PaymentService
+
+Controller --> User: 200 OK\n显示支付页面(订单金额、支付方式)
+deactivate Controller
+
+== 2. 用户确认支付 ==
+
+User -> Controller: POST /payments\n(orderNumber, paymentMethod)
+activate Controller
+
+Controller -> Request: new CreatePaymentRequest()
+activate Request
+Request --> Controller: request
+deactivate Request
+
+Controller -> Controller: 参数验证
+
+== 3. 创建支付订单 ==
+
+Controller -> PaymentService: createPaymentOrder(orderNumber, paymentMethod)
+activate PaymentService
+
+PaymentService -> PaymentOrder: new PaymentOrder()
+activate PaymentOrder
+PaymentOrder --> PaymentService: paymentOrder
+
+PaymentService -> PaymentOrder: generatePaymentNumber()
+PaymentOrder --> PaymentService: paymentNumber
+
+PaymentService -> PaymentOrder: setOrderInfo(orderId, amount)
+PaymentService -> PaymentOrder: setPaymentMethod(paymentMethod)
+PaymentService -> PaymentOrder: setStatus(PENDING)
+PaymentService -> PaymentOrder: setExpireTime(15分钟)
+
+PaymentService -> PaymentRepo: save(paymentOrder)
+activate PaymentRepo
+PaymentRepo -> PaymentDB: INSERT INTO payment_orders\n(payment_number, order_id, amount, ...)
+activate PaymentDB
+PaymentDB --> PaymentRepo: payment_id
+deactivate PaymentDB
+PaymentRepo --> PaymentService: savedPaymentOrder
+deactivate PaymentRepo
+deactivate PaymentOrder
+
+== 4. 调用支付网关（模拟支付） ==
+
+PaymentService -> Gateway: processPayment(paymentNumber, amount, method)
+activate Gateway
+
+Gateway -> Gateway: 模拟支付处理(2-3秒)\n成功率90%
+
+Gateway --> PaymentService: paymentResult(success/fail)
+deactivate Gateway
+
+== 5. 处理支付回调 ==
+
+PaymentService -> CallbackHandler: handleCallback(paymentNumber, status, details)
+activate CallbackHandler
+
+alt 支付成功
+    
+    == 5.1 支付成功流程 ==
+    
+    CallbackHandler -> PaymentRepo: findByPaymentNumber(paymentNumber)
+    activate PaymentRepo
+    PaymentRepo -> PaymentDB: SELECT * FROM payment_orders\nWHERE payment_number = ?
+    activate PaymentDB
+    PaymentDB --> PaymentRepo: payment_data
+    deactivate PaymentDB
+    PaymentRepo --> CallbackHandler: paymentOrder
+    deactivate PaymentRepo
+    
+    CallbackHandler -> PaymentOrder: updateStatus(SUCCESS)
+    activate PaymentOrder
+    PaymentOrder --> CallbackHandler: updated
+    deactivate PaymentOrder
+    
+    CallbackHandler -> PaymentRepo: update(paymentOrder)
+    activate PaymentRepo
+    PaymentRepo -> PaymentDB: UPDATE payment_orders\nSET status = 'SUCCESS', pay_time = ?\nWHERE payment_number = ?
+    activate PaymentDB
+    PaymentDB --> PaymentRepo: success
+    deactivate PaymentDB
+    PaymentRepo --> CallbackHandler: updated
+    deactivate PaymentRepo
+    
+    == 5.2 发送支付成功消息到RabbitMQ ==
+    
+    CallbackHandler -> MQ: publish(payment.success, message)
+    activate MQ
+    note right of MQ
+        消息体：
+        {
+          "paymentNumber": "PAY20251118001",
+          "orderNumber": "ORD20251118001",
+          "status": "SUCCESS",
+          "payTime": "2025-11-18T14:30:00"
+        }
+    end note
+    MQ --> CallbackHandler: ack
+    deactivate MQ
+    
+    == 5.3 订单服务消费消息（异步） ==
+    
+    MQ -> OrderService: consume(payment.success.queue)
+    activate OrderService
+    
+    OrderService -> OrderRepo: findByOrderNumber(orderNumber)
+    activate OrderRepo
+    OrderRepo -> OrderDB: SELECT * FROM orders\nWHERE order_number = ?
+    activate OrderDB
+    OrderDB --> OrderRepo: order_data
+    deactivate OrderDB
+    OrderRepo --> OrderService: order
+    deactivate OrderRepo
+    
+    OrderService -> Order: setStatus(PENDING_SHIPMENT)
+    activate Order
+    OrderService -> Order: setPayTime(now)
+    Order --> OrderService: updated
+    deactivate Order
+    
+    OrderService -> OrderRepo: update(order)
+    activate OrderRepo
+    OrderRepo -> OrderDB: UPDATE orders\nSET status = 'PENDING_SHIPMENT',\npay_time = ?\nWHERE order_number = ?
+    activate OrderDB
+    OrderDB --> OrderRepo: success
+    deactivate OrderDB
+    OrderRepo --> OrderService: updated
+    deactivate OrderRepo
+    
+    == 5.4 扣减库存 ==
+    
+    OrderService -> InventoryService: deductStock(orderNumber)
+    activate InventoryService
+    
+    loop 遍历订单商品
+        InventoryService -> InventoryRepo: findByProductId(productId)
+        activate InventoryRepo
+        InventoryRepo -> ProductDB: SELECT * FROM inventory\nWHERE product_id = ?
+        activate ProductDB
+        ProductDB --> InventoryRepo: inventory_data
+        deactivate ProductDB
+        InventoryRepo --> InventoryService: inventory
+        deactivate InventoryRepo
+        
+        InventoryService -> Inventory: deductLockedStock(orderNumber)
+        activate Inventory
+        Inventory -> Inventory: 实际扣减库存\ntotalStock -= lockedQuantity\nlockedStock -= lockedQuantity
+        Inventory --> InventoryService: deducted
+        deactivate Inventory
+        
+        InventoryService -> InventoryRepo: update(inventory)
+        activate InventoryRepo
+        InventoryRepo -> ProductDB: UPDATE inventory SET\ntotal_stock = ?,\nlocked_stock = ?\nWHERE product_id = ?
+        activate ProductDB
+        ProductDB --> InventoryRepo: success
+        deactivate ProductDB
+        InventoryRepo --> InventoryService: updated
+        deactivate InventoryRepo
+    end
+    
+    InventoryService --> OrderService: allDeducted
+    deactivate InventoryService
+    
+    == 5.5 清空购物车（调用购物车服务） ==
+    
+    OrderService -> OrderService: clearPaidItems(userId, orderNumber)
+    note right: 通过OpenFeign调用购物车服务
+    
+    OrderService --> MQ: ack(消息消费成功)
+    deactivate OrderService
+    
+    == 5.6 生成支付记录 ==
+    
+    CallbackHandler -> Record: createPaymentRecord(paymentOrder, SUCCESS)
+    activate Record
+    Record --> CallbackHandler: record
+    deactivate Record
+    
+    CallbackHandler -> RecordRepo: save(record)
+    activate RecordRepo
+    RecordRepo -> PaymentDB: INSERT INTO payment_records\n(payment_number, user_id, amount, status, ...)
+    activate PaymentDB
+    PaymentDB --> RecordRepo: record_id
+    deactivate PaymentDB
+    RecordRepo --> CallbackHandler: savedRecord
+    deactivate RecordRepo
+    
+    CallbackHandler --> PaymentService: success
+    deactivate CallbackHandler
+    
+    == 5.7 返回支付成功响应 ==
+    
+    PaymentService -> Response: new PaymentResponse()
+    activate Response
+    PaymentService -> Response: setPaymentNumber(paymentNumber)
+    PaymentService -> Response: setStatus("SUCCESS")
+    PaymentService -> Response: setAmount(amount)
+    Response --> PaymentService: response
+    deactivate Response
+    
+    PaymentService --> Controller: response
+    deactivate PaymentService
+    
+    Controller --> User: 200 OK\n{"code": 200, "message": "支付成功"}
+    deactivate Controller
+
+else 支付失败
+    
+    == 5.8 支付失败流程 ==
+    
+    CallbackHandler -> PaymentOrder: updateStatus(FAILED)
+    activate PaymentOrder
+    PaymentOrder --> CallbackHandler: updated
+    deactivate PaymentOrder
+    
+    CallbackHandler -> PaymentRepo: update(paymentOrder)
+    activate PaymentRepo
+    PaymentRepo -> PaymentDB: UPDATE payment_orders\nSET status = 'FAILED'\nWHERE payment_number = ?
+    activate PaymentDB
+    PaymentDB --> PaymentRepo: success
+    deactivate PaymentDB
+    PaymentRepo --> CallbackHandler: updated
+    deactivate PaymentRepo
+    
+    CallbackHandler -> OrderService: cancelOrder(orderNumber)
+    activate OrderService
+    OrderService -> Order: setStatus(CANCELLED)
+    activate Order
+    Order --> OrderService: cancelled
+    deactivate Order
+    OrderService -> OrderRepo: update(order)
+    activate OrderRepo
+    OrderRepo -> OrderDB: UPDATE orders\nSET status = 'CANCELLED'\nWHERE order_number = ?
+    activate OrderDB
+    OrderDB --> OrderRepo: success
+    deactivate OrderDB
+    OrderRepo --> OrderService: updated
+    deactivate OrderRepo
+    OrderService --> CallbackHandler: cancelled
+    deactivate OrderService
+    
+    CallbackHandler -> InventoryService: releaseStock(orderNumber)
+    activate InventoryService
+    
+    loop 遍历订单商品
+        InventoryService -> Inventory: releaseLockedStock(orderNumber)
+        activate Inventory
+        Inventory -> Inventory: 释放预扣库存\navailableStock += lockedQuantity\nlockedStock -= lockedQuantity
+        Inventory --> InventoryService: released
+        deactivate Inventory
+        
+        InventoryService -> InventoryRepo: update(inventory)
+        activate InventoryRepo
+        InventoryRepo -> ProductDB: UPDATE inventory SET\navailable_stock = ?,\nlocked_stock = ?\nWHERE product_id = ?
+        activate ProductDB
+        ProductDB --> InventoryRepo: success
+        deactivate ProductDB
+        InventoryRepo --> InventoryService: updated
+        deactivate InventoryRepo
+    end
+    
+    InventoryService --> CallbackHandler: allReleased
+    deactivate InventoryService
+    
+    CallbackHandler -> Record: createPaymentRecord(paymentOrder, FAILED)
+    activate Record
+    Record --> CallbackHandler: record
+    deactivate Record
+    
+    CallbackHandler -> RecordRepo: save(record)
+    activate RecordRepo
+    RecordRepo -> PaymentDB: INSERT INTO payment_records\n(payment_number, status = 'FAILED', ...)
+    activate PaymentDB
+    PaymentDB --> RecordRepo: record_id
+    deactivate PaymentDB
+    RecordRepo --> CallbackHandler: savedRecord
+    deactivate RecordRepo
+    
+    CallbackHandler --> PaymentService: failed
+    deactivate CallbackHandler
+    
+    PaymentService --> Controller: paymentFailed(reason)
+    deactivate PaymentService
+    
+    Controller --> User: 400 Bad Request\n{"code": 400, "message": "支付失败"}
+    deactivate Controller
+    
+end
+
+@enduml

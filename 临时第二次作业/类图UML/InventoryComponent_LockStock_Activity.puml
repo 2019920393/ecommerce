@@ -1,0 +1,112 @@
+@startuml InventoryComponent_LockStock_Activity
+
+!theme plain
+
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+title 库存构件 - 锁定库存活动图
+
+start
+
+:接收锁定库存请求;
+note right
+  输入参数：
+  - orderNumber: 订单号
+  - productList: 商品列表
+    [{productId, quantity}, ...]
+end note
+
+:初始化锁定结果列表;
+
+repeat
+  :获取下一个商品;
+  
+  :根据productId查询库存;
+  note right
+    SELECT * FROM inventory
+    WHERE product_id = ?
+    FOR UPDATE
+  end note
+  
+  if (库存记录存在?) then (是)
+    
+    :检查可用库存;
+    
+    if (available_stock >= quantity?) then (是)
+      
+      :使用乐观锁更新库存;
+      note right
+        UPDATE inventory SET
+        available_stock = available_stock - ?,
+        locked_stock = locked_stock + ?,
+        version = version + 1
+        WHERE product_id = ?
+        AND version = ?
+      end note
+      
+      if (更新成功?) then (是)
+        
+        :创建库存锁记录;
+        note right
+          INSERT INTO inventory_locks
+          (product_id, order_number,
+           locked_quantity, lock_status)
+          VALUES (?, ?, ?, 'LOCKED')
+        end note
+        
+        :添加到成功列表;
+        
+      else (否-版本冲突)
+        :记录失败日志;
+        :添加到失败列表;
+        
+        #FF6B6B:乐观锁冲突\n需要重试;
+      endif
+      
+    else (否)
+      :记录库存不足日志;
+      :添加到失败列表;
+      
+      #FF6B6B:库存不足;
+    endif
+    
+  else (否)
+    :记录错误日志;
+    :添加到失败列表;
+    
+    #FF6B6B:库存记录不存在;
+  endif
+  
+repeat while (还有更多商品?) is (是)
+-> 否;
+
+if (所有商品锁定成功?) then (是)
+  :封装StockLockResult(success=true);
+  
+  #4CAF50:库存锁定成功;
+  stop
+  
+else (否)
+  :回滚已锁定的库存;
+  
+  repeat
+    :释放已锁定的库存;
+    note right
+      UPDATE inventory SET
+      available_stock = available_stock + ?,
+      locked_stock = locked_stock - ?
+      WHERE product_id = ?
+    end note
+    
+    :更新库存锁状态为RELEASED;
+  repeat while (还有已锁定的商品?) is (是)
+  -> 否;
+  
+  :封装StockLockResult(success=false);
+  
+  #FF6B6B:库存锁定失败\n已回滚;
+  stop
+endif
+
+@enduml

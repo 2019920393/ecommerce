@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlantUML在线编辑器 - 快速导航</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 800px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .step {
+            background: #f5f5f5;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+            border-left: 5px solid #667eea;
+        }
+        .step h3 {
+            color: #667eea;
+            margin-top: 0;
+        }
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+        .btn {
+            display: inline-block;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            transition: transform 0.3s, box-shadow 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            flex: 1;
+            text-align: center;
+            min-width: 200px;
+        }
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        .btn-secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        code {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', monospace;
+        }
+        .warning {
+            background: #fff3e0;
+            border-left-color: #ff9800;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .success {
+            background: #e8f5e9;
+            border-left: 5px solid #4caf50;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 PlantUML在线导出工具</h1>
+        
+        <div class="success">
+            <strong>✅ 推荐方法：</strong> 使用在线PlantUML编辑器，无需任何插件，100%可用！
+        </div>
+        
+        <div class="step">
+            <h3>📋 步骤1：打开在线编辑器</h3>
+            <p>点击下方按钮，在新窗口打开PlantUML在线编辑器：</p>
+            <div class="button-group">
+                <a href="http://www.plantuml.com/plantuml/uml/" target="_blank" class="btn">
+                    🌐 PlantUML官方编辑器
+                </a>
+                <a href="https://www.planttext.com/" target="_blank" class="btn btn-secondary">
+                    🌐 PlantText编辑器
+                </a>
+            </div>
+        </div>
+        
+        <div class="step">
+            <h3>📝 步骤2：复制PlantUML代码</h3>
+            <p>在VS Code中：</p>
+            <ul>
+                <li>打开任意 <code>.puml</code> 文件</li>
+                <li>按 <code>Ctrl + A</code> 全选</li>
+                <li>按 <code>Ctrl + C</code> 复制</li>
+            </ul>
+        </div>
+        
+        <div class="step">
+            <h3>🖼️ 步骤3：粘贴并导出</h3>
+            <p>在在线编辑器中：</p>
+            <ul>
+                <li>粘贴代码到左侧编辑区（<code>Ctrl + V</code>）</li>
+                <li>右侧会自动显示UML图</li>
+                <li>点击 <strong>"PNG"</strong> 或 <strong>"SVG"</strong> 按钮下载图片</li>
+            </ul>
+        </div>
+        
+        <div class="warning">
+            <strong>💡 提示：</strong>
+            <ul style="margin: 10px 0 0 20px;">
+                <li>PNG格式适合放入Word/PPT</li>
+                <li>SVG格式是矢量图，可以无限缩放</li>
+                <li>在线编辑器支持实时预览</li>
+            </ul>
+        </div>
+        
+        <div class="step">
+            <h3>📁 你的UML文件位置</h3>
+            <p>已准备好的4个文件：</p>
+            <ul>
+                <li><code>UC9_CreateOrder_Sequence.puml</code> - 创建订单顺序图</li>
+                <li><code>UC10_OrderPayment_Sequence.puml</code> - 订单支付顺序图</li>
+                <li><code>Order_StateDiagram.puml</code> - 订单状态图</li>
+                <li><code>PaymentOrder_StateDiagram.puml</code> - 支付订单状态图</li>
+            </ul>
+        </div>
+        
+        <div class="step">
+            <h3>⚡ VS Code命令面板方法（备选）</h3>
+            <p>如果想在VS Code中直接导出：</p>
+            <ol>
+                <li>打开 <code>.puml</code> 文件</li>
+                <li>按 <code>Ctrl + Shift + P</code></li>
+                <li>输入：<code>export current</code></li>
+                <li>选择：<strong>PlantUML: Export Current Diagram</strong></li>
+                <li>图片会自动保存到文件所在目录</li>
+            </ol>
+        </div>
+        
+        <div class="button-group" style="margin-top: 40px;">
+            <a href="http://www.plantuml.com/plantuml/uml/" target="_blank" class="btn">
+                🚀 立即开始导出
+            </a>
+        </div>
+    </div>
+</body>
+</html>
+
+

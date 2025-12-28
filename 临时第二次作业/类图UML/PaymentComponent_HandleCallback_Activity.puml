@@ -1,0 +1,102 @@
+@startuml PaymentComponent_HandleCallback_Activity
+
+!theme plain
+
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+title 支付构件 - 处理支付回调活动图
+
+start
+
+:接收第三方支付回调;
+note right
+  回调参数：
+  - paymentNumber: 支付流水号
+  - tradeStatus: 交易状态
+  - transactionId: 第三方交易ID
+  - sign: 签名
+end note
+
+:验证回调签名;
+
+if (签名验证通过?) then (是)
+  
+  :根据支付流水号查询支付订单;
+  
+  if (支付订单存在?) then (是)
+    
+    if (交易状态 == SUCCESS?) then (支付成功)
+      
+      :更新支付订单状态为SUCCESS;
+      :设置支付时间;
+      :设置第三方交易ID;
+      :保存到数据库;
+      
+      :发布支付成功消息到RabbitMQ;
+      note right
+        消息内容：
+        - paymentNumber
+        - orderNumber
+        - userId
+        - amount
+        - paymentMethod
+        - payTime
+      end note
+      
+      :生成支付记录（SUCCESS）;
+      :保存PaymentRecord到数据库;
+      
+      :返回success给第三方;
+      
+      #4CAF50:支付成功处理完成;
+      stop
+      
+    elseif (交易状态 == FAILED?) then (支付失败)
+      
+      :更新支付订单状态为FAILED;
+      :设置失败原因;
+      :保存到数据库;
+      
+      :调用OrderService取消订单;
+      
+      :调用InventoryService释放库存;
+      note right
+        遍历订单商品：
+        available_stock += locked_quantity
+        locked_stock -= locked_quantity
+      end note
+      
+      :生成支付记录（FAILED）;
+      :保存PaymentRecord到数据库;
+      
+      :返回success给第三方;
+      
+      #FF6B6B:支付失败处理完成;
+      stop
+      
+    else (其他状态)
+      :记录日志;
+      :返回success给第三方;
+      
+      #FFA726:未知状态\n幂等处理;
+      stop
+    endif
+    
+  else (否)
+    :记录错误日志;
+    :返回success给第三方（避免重复回调）;
+    
+    #FF6B6B:支付订单不存在;
+    stop
+  endif
+  
+else (否)
+  :记录安全日志;
+  :返回fail给第三方;
+  
+  #FF6B6B:签名验证失败\n可能是伪造请求;
+  stop
+endif
+
+@enduml

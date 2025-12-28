@@ -1,0 +1,148 @@
+@startuml 开发环境部署图_Docker_Compose
+!theme plain
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 12
+skinparam componentStyle rectangle
+
+title 开发环境部署架构图（Docker-Compose）\nUML 2.5 部署图
+
+' 定义Docker主机节点
+node "Docker Host" as dockerHost {
+    
+    ' Docker网络
+    package "Docker Bridge Network" as network {
+        
+        ' 基础设施层
+        package "基础设施层" as infrastructure {
+            database "MySQL\n:Container" as mysql {
+                artifact "MySQL 8.0" as mysqlImg
+            }
+            
+            node "Redis\n:Container" as redis {
+                artifact "Redis 7.0" as redisImg
+            }
+            
+            node "Nacos\n:Container" as nacos {
+                artifact "Nacos 2.x" as nacosImg
+            }
+            
+            node "RabbitMQ\n:Container" as rabbitmq {
+                artifact "RabbitMQ 3.x" as rabbitmqImg
+            }
+        }
+        
+        ' 网关层
+        package "网关层" as gatewayLayer {
+            node "API Gateway\n:Container" as gateway {
+                component "Gateway Service" as gatewaySvc
+                artifact "gateway.jar" as gatewayJar
+            }
+        }
+        
+        ' 微服务层
+        package "微服务层" as serviceLayer {
+            node "User Service\n:Container" as userSvc {
+                component "User Service" as userComp
+                artifact "user-service.jar" as userJar
+            }
+            
+            node "Product Service\n:Container" as productSvc {
+                component "Product Service" as productComp
+                artifact "product-service.jar" as productJar
+            }
+            
+            node "Order Service\n:Container" as orderSvc {
+                component "Order Service" as orderComp
+                artifact "order-service.jar" as orderJar
+            }
+            
+            node "Payment Service\n:Container" as paymentSvc {
+                component "Payment Service" as paymentComp
+                artifact "payment-service.jar" as paymentJar
+            }
+        }
+    }
+    
+    ' 前端容器（可选）
+    node "Frontend\n:Container" as frontend {
+        component "React/Vue App" as frontendApp
+        artifact "Nginx + Static Files" as nginxArtifact
+    }
+}
+
+' 外部客户端
+actor "开发人员" as developer
+node "开发者浏览器" as browser
+
+' 关系定义
+browser --> frontend : "HTTP :8080"
+browser --> gateway : "HTTP :8000"
+
+frontend ..> gateway : "API调用"
+
+gateway --> userSvc : "HTTP"
+gateway --> productSvc : "HTTP"
+gateway --> orderSvc : "HTTP"
+gateway --> paymentSvc : "HTTP"
+
+userSvc --> mysql : "JDBC :3306"
+productSvc --> mysql : "JDBC :3306"
+orderSvc --> mysql : "JDBC :3306"
+paymentSvc --> mysql : "JDBC :3306"
+
+userSvc --> redis : "Redis Protocol :6379"
+productSvc --> redis : "Redis Protocol :6379"
+orderSvc --> redis : "Redis Protocol :6379"
+paymentSvc --> redis : "Redis Protocol :6379"
+
+userSvc --> nacos : "服务注册 :8848"
+productSvc --> nacos : "服务注册 :8848"
+orderSvc --> nacos : "服务注册 :8848"
+paymentSvc --> nacos : "服务注册 :8848"
+gateway --> nacos : "服务发现 :8848"
+
+orderSvc --> rabbitmq : "AMQP :5672"
+paymentSvc --> rabbitmq : "AMQP :5672"
+
+developer -up-> browser : "使用"
+
+' 注释
+note right of dockerHost
+  **开发环境特点**:
+  • 所有服务在单个Docker主机上运行
+  • 使用docker-compose.yml统一编排
+  • 服务间通过bridge网络通信
+  • 适合本地开发和调试
+  • 资源占用相对较少
+end note
+
+note bottom of infrastructure
+  基础设施服务提供:
+  • MySQL: 数据持久化
+  • Redis: 缓存和会话存储
+  • Nacos: 服务注册与配置管理
+  • RabbitMQ: 消息队列
+end note
+
+note bottom of serviceLayer
+  微服务特点:
+  • 每个服务独立容器
+  • 支持独立启动/停止
+  • 通过Gateway统一访问
+  • 支持热重载开发
+end note
+
+legend right
+  |= 符号说明 |
+  | <size:11>节点(Node): 表示Docker容器</size> |
+  | <size:11>组件(Component): 表示服务/应用</size> |
+  | <size:11>构件(Artifact): 表示可部署文件</size> |
+  | <size:11>数据库: 表示数据存储节点</size> |
+  | <size:11>实线箭头: 通信依赖</size> |
+  | <size:11>虚线箭头: 逻辑依赖</size> |
+endlegend
+
+@enduml
+
+
+

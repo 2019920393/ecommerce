@@ -1,0 +1,183 @@
+@startuml UC9_Refined_Sequence
+
+!theme plain
+
+' ============================
+' 中文字体配置
+' ============================
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+title UC9: 创建订单 - 精化后的顺序图（基于分层架构+MVC模式）
+
+actor User as "用户"
+participant "<<Boundary>>\n:OrderController" as Controller
+participant "<<DTO>>\n:CreateOrderRequest" as Request
+participant "<<Control>>\n:OrderService" as OrderService
+participant "<<Control>>\n:InventoryService" as InventoryService
+participant "<<Entity>>\n:Order" as Order
+participant "<<Entity>>\n:OrderItem" as OrderItem
+participant "<<Entity>>\n:Inventory" as Inventory
+participant "<<Repository>>\n:OrderRepository" as OrderRepo
+participant "<<Repository>>\n:InventoryRepository" as InventoryRepo
+participant "<<DTO>>\n:CreateOrderResponse" as Response
+database "MySQL\norder_db" as OrderDB
+database "MySQL\nproduct_db" as ProductDB
+
+== 1. 用户提交订单 ==
+
+User -> Controller: POST /orders\n(userId, cartItemIds, addressId)
+activate Controller
+
+Controller -> Request: new CreateOrderRequest()
+activate Request
+Request --> Controller: request
+deactivate Request
+
+Controller -> Controller: 参数验证
+
+== 2. 调用业务逻辑层 ==
+
+Controller -> OrderService: createOrder(request)
+activate OrderService
+
+OrderService -> OrderService: 获取购物车项信息\n(调用购物车服务)
+
+== 3. 校验库存（调用库存服务） ==
+
+OrderService -> InventoryService: batchCheckStock(productList)
+activate InventoryService
+
+loop 遍历每个商品
+    InventoryService -> InventoryRepo: findByProductId(productId)
+    activate InventoryRepo
+    InventoryRepo -> ProductDB: SELECT * FROM inventory\nWHERE product_id = ?
+    activate ProductDB
+    ProductDB --> InventoryRepo: inventory_data
+    deactivate ProductDB
+    InventoryRepo --> InventoryService: inventory
+    deactivate InventoryRepo
+    
+    InventoryService -> Inventory: checkStock(quantity)
+    activate Inventory
+    Inventory --> InventoryService: stockAvailable
+    deactivate Inventory
+end
+
+InventoryService --> OrderService: stockCheckResult
+deactivate InventoryService
+
+alt 库存不足
+    OrderService --> Controller: 抛出异常(库存不足)
+    Controller --> User: 400 Bad Request\n{"code": 400, "message": "库存不足"}
+else 库存充足
+
+    == 4. 创建订单实体 ==
+    
+    OrderService -> Order: new Order()
+    activate Order
+    Order --> OrderService: order
+    
+    OrderService -> Order: setOrderInfo(userId, addressInfo, totalAmount)
+    OrderService -> Order: generateOrderNumber()
+    Order --> OrderService: orderNumber
+    OrderService -> Order: setStatus(PENDING_PAYMENT)
+    OrderService -> Order: setExpireTime(30分钟)
+    
+    == 5. 创建订单明细 ==
+    
+    loop 遍历购物车项
+        OrderService -> OrderItem: createFromCartItem(cartItem)
+        activate OrderItem
+        OrderItem --> OrderService: orderItem
+        deactivate OrderItem
+        
+        OrderService -> Order: addOrderItem(orderItem)
+    end
+    
+    == 6. 计算订单金额 ==
+    
+    OrderService -> Order: calculateTotalAmount()
+    Order --> OrderService: totalAmount
+    
+    == 7. 预扣库存（分布式事务） ==
+    
+    OrderService -> InventoryService: lockStock(orderNumber, productList)
+    activate InventoryService
+    
+    loop 遍历每个商品
+        InventoryService -> InventoryRepo: findByProductId(productId)
+        activate InventoryRepo
+        InventoryRepo -> ProductDB: SELECT * FROM inventory\nWHERE product_id = ?\nFOR UPDATE
+        activate ProductDB
+        ProductDB --> InventoryRepo: inventory_data
+        deactivate ProductDB
+        InventoryRepo --> InventoryService: inventory
+        deactivate InventoryRepo
+        
+        InventoryService -> Inventory: lockStock(quantity, orderNumber)
+        activate Inventory
+        Inventory -> Inventory: 使用乐观锁更新\navailableStock -= quantity\nlockedStock += quantity\nversion += 1
+        Inventory --> InventoryService: lockSuccess
+        deactivate Inventory
+        
+        InventoryService -> InventoryRepo: updateWithOptimisticLock(inventory)
+        activate InventoryRepo
+        InventoryRepo -> ProductDB: UPDATE inventory SET\navailable_stock = ?,\nlocked_stock = ?,\nversion = version + 1\nWHERE product_id = ?\nAND version = ?
+        activate ProductDB
+        ProductDB --> InventoryRepo: affected_rows
+        deactivate ProductDB
+        InventoryRepo --> InventoryService: updateSuccess
+        deactivate InventoryRepo
+    end
+    
+    InventoryService --> OrderService: allLocked
+    deactivate InventoryService
+    
+    alt 库存锁定失败
+        OrderService -> Order: delete()
+        OrderService --> Controller: 抛出异常(库存锁定失败)
+        Controller --> User: 500 Internal Server Error\n{"code": 500, "message": "库存锁定失败"}
+    else 库存锁定成功
+        
+        == 8. 保存订单到数据库 ==
+        
+        OrderService -> OrderRepo: save(order)
+        activate OrderRepo
+        OrderRepo -> OrderDB: INSERT INTO orders\n(order_number, user_id, total_amount, status, ...)
+        activate OrderDB
+        OrderDB --> OrderRepo: order_id
+        deactivate OrderDB
+        
+        OrderRepo -> OrderDB: INSERT INTO order_items\n(order_id, product_id, quantity, ...)
+        activate OrderDB
+        OrderDB --> OrderRepo: success
+        deactivate OrderDB
+        
+        OrderRepo --> OrderService: savedOrder
+        deactivate OrderRepo
+        deactivate Order
+        
+        == 9. 返回响应 ==
+        
+        OrderService -> Response: new CreateOrderResponse()
+        activate Response
+        OrderService -> Response: setOrderNumber(orderNumber)
+        OrderService -> Response: setTotalAmount(totalAmount)
+        OrderService -> Response: setCreateTime(now)
+        OrderService -> Response: setExpireTime(expireTime)
+        Response --> OrderService: response
+        deactivate Response
+        
+        OrderService --> Controller: response
+        deactivate OrderService
+        
+        Controller --> User: 200 OK\n{"code": 200, "data": {...}}
+        deactivate Controller
+    end
+end
+
+@enduml

@@ -1,0 +1,297 @@
+@startuml 云原生电商平台系统架构构件图_带接口
+' 设置中文字体支持
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+' 设置样式
+skinparam component {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  BorderThickness 2
+  FontSize 11
+  FontStyle bold
+}
+
+skinparam interface {
+  BackgroundColor #FFFFFF
+  BorderColor #FF6F00
+  BorderThickness 2
+}
+
+skinparam shadowing false
+skinparam backgroundColor #FEFEFE
+
+' 标题
+title 云原生微服务电商平台 - 系统架构构件图（供需接口） (UML 2.5)
+center footer UML版本: UML 2.5 | 建模工具: PlantUML | 接口表示: Provided/Required Interface
+
+' ========================================
+' 客户端
+' ========================================
+component "<<client>>\nWeb浏览器" as WebClient #LightBlue
+component "<<client>>\n移动应用" as MobileClient #LightBlue
+
+' ========================================
+' API网关
+' ========================================
+package "<<subsystem>> API Gateway Layer" {
+  component "API Gateway\n(Spring Cloud Gateway)" as Gateway #90EE90 {
+  }
+  
+  ' API网关提供的接口
+  () "HTTPS API" as GatewayAPI
+  Gateway -up- GatewayAPI
+  
+  ' API网关需要的接口
+  interface "User API" as IUserAPI
+  interface "Product API" as IProductAPI
+  interface "Order API" as IOrderAPI
+  interface "Payment API" as IPaymentAPI
+  
+  Gateway -down-( IUserAPI
+  Gateway -down-( IProductAPI
+  Gateway -down-( IOrderAPI
+  Gateway -down-( IPaymentAPI
+}
+
+' ========================================
+' 微服务层
+' ========================================
+package "<<layer>> Microservices Layer" {
+  
+  ' ===== 用户服务 =====
+  component "<<subsystem>> User Service" as UserService #FFEB3B {
+    component ":UserController" as UserCtrl
+    component ":UserService" as UserSvc
+  }
+  
+  ' 用户服务提供的接口
+  () "User API\n(REST)" as UserAPI
+  UserService -up- UserAPI
+  
+  ' 用户服务需要的接口
+  interface "Nacos Registry" as IUserNacos
+  interface "MySQL" as IUserDB
+  interface "Redis" as IUserCache
+  
+  UserService -down-( IUserNacos
+  UserService -down-( IUserDB
+  UserService -down-( IUserCache
+  
+  ' ===== 商品服务 =====
+  component "<<subsystem>> Product Service" as ProductService #FFEB3B {
+    component ":ProductController" as ProductCtrl
+    component ":ProductService" as ProductSvc
+  }
+  
+  ' 商品服务提供的接口
+  () "Product API\n(REST)" as ProductAPI
+  ProductService -up- ProductAPI
+  
+  ' 商品服务需要的接口
+  interface "Nacos Registry" as IProductNacos
+  interface "MySQL" as IProductDB
+  interface "Redis" as IProductCache
+  
+  ProductService -down-( IProductNacos
+  ProductService -down-( IProductDB
+  ProductService -down-( IProductCache
+  
+  ' ===== 订单服务 =====
+  component "<<subsystem>> Order Service" as OrderService #FF9800 {
+    component ":OrderController" as OrderCtrl
+    component ":OrderService" as OrderSvc
+  }
+  
+  ' 订单服务提供的接口
+  () "Order API\n(REST)" as OrderAPI
+  OrderService -up- OrderAPI
+  
+  ' 订单服务需要的接口
+  interface "Nacos Registry" as IOrderNacos
+  interface "MySQL" as IOrderDB
+  interface "Redis" as IOrderCache
+  interface "RabbitMQ" as IOrderMQ
+  interface "Product API" as IOrderProduct
+  
+  OrderService -down-( IOrderNacos
+  OrderService -down-( IOrderDB
+  OrderService -down-( IOrderCache
+  OrderService -down-( IOrderMQ
+  OrderService -right-( IOrderProduct
+  
+  ' ===== 支付服务 =====
+  component "<<subsystem>> Payment Service" as PaymentService #FF9800 {
+    component ":PaymentController" as PaymentCtrl
+    component ":PaymentService" as PaymentSvc
+  }
+  
+  ' 支付服务提供的接口
+  () "Payment API\n(REST)" as PaymentAPI
+  PaymentService -up- PaymentAPI
+  
+  ' 支付服务需要的接口
+  interface "Nacos Registry" as IPaymentNacos
+  interface "MySQL" as IPaymentDB
+  interface "RabbitMQ" as IPaymentMQ
+  interface "Order API" as IPaymentOrder
+  
+  PaymentService -down-( IPaymentNacos
+  PaymentService -down-( IPaymentDB
+  PaymentService -down-( IPaymentMQ
+  PaymentService -left-( IPaymentOrder
+}
+
+' ========================================
+' 基础设施层
+' ========================================
+package "<<layer>> Infrastructure Layer" {
+  
+  ' Nacos服务注册中心
+  component "<<infrastructure>>\nNacos" as Nacos #E1BEE7 {
+  }
+  
+  () "Service Registry\n& Config" as NacosAPI
+  Nacos -up- NacosAPI
+  
+  ' MySQL数据库
+  database "<<database>>\nMySQL" as MySQL #FFF9C4 {
+  }
+  
+  () "Database\nConnection" as MySQLAPI
+  MySQL -up- MySQLAPI
+  
+  ' Redis缓存
+  database "<<database>>\nRedis" as Redis #FFCCBC {
+  }
+  
+  () "Cache\nService" as RedisAPI
+  Redis -up- RedisAPI
+  
+  ' RabbitMQ消息队列
+  component "<<middleware>>\nRabbitMQ" as RabbitMQ #C5E1A5 {
+  }
+  
+  () "Message\nQueue" as RabbitMQAPI
+  RabbitMQ -up- RabbitMQAPI
+}
+
+' ========================================
+' 监控与日志层
+' ========================================
+package "<<layer>> Monitoring & Logging" {
+  component "<<monitor>>\nPrometheus\n+Grafana" as Monitor #B3E5FC
+  component "<<monitor>>\nELK Stack" as ELK #B2DFDB
+  component "<<monitor>>\nZipkin" as Zipkin #F8BBD0
+  
+  () "Metrics API" as MonitorAPI
+  Monitor -up- MonitorAPI
+  
+  () "Logging API" as ELKAPI
+  ELK -up- ELKAPI
+  
+  () "Tracing API" as ZipkinAPI
+  Zipkin -up- ZipkinAPI
+}
+
+' ========================================
+' 接口连接关系（供需匹配）
+' ========================================
+
+' 客户端 -> API网关
+WebClient -down-> GatewayAPI : HTTPS
+MobileClient -down-> GatewayAPI : HTTPS
+
+' API网关需要的接口 -> 微服务提供的接口
+IUserAPI ..> UserAPI : 路由
+IProductAPI ..> ProductAPI : 路由
+IOrderAPI ..> OrderAPI : 路由
+IPaymentAPI ..> PaymentAPI : 路由
+
+' 微服务需要Nacos -> Nacos提供的接口
+IUserNacos ..> NacosAPI : 注册
+IProductNacos ..> NacosAPI : 注册
+IOrderNacos ..> NacosAPI : 注册
+IPaymentNacos ..> NacosAPI : 注册
+
+' 微服务需要MySQL -> MySQL提供的接口
+IUserDB ..> MySQLAPI : 持久化
+IProductDB ..> MySQLAPI : 持久化
+IOrderDB ..> MySQLAPI : 持久化
+IPaymentDB ..> MySQLAPI : 持久化
+
+' 微服务需要Redis -> Redis提供的接口
+IUserCache ..> RedisAPI : 缓存
+IProductCache ..> RedisAPI : 缓存
+IOrderCache ..> RedisAPI : 缓存
+
+' 微服务需要RabbitMQ -> RabbitMQ提供的接口
+IOrderMQ ..> RabbitMQAPI : 发送消息
+IPaymentMQ ..> RabbitMQAPI : 发送消息
+
+' 服务间调用：订单服务需要商品API -> 商品服务提供的API
+IOrderProduct ..> ProductAPI : 调用
+
+' 服务间调用：支付服务需要订单API -> 订单服务提供的API
+IPaymentOrder ..> OrderAPI : 调用
+
+' 微服务 -> 监控组件（使用虚线表示监控关系）
+UserService ..> MonitorAPI : 上报指标
+ProductService ..> MonitorAPI : 上报指标
+OrderService ..> MonitorAPI : 上报指标
+PaymentService ..> MonitorAPI : 上报指标
+
+UserService ..> ELKAPI : 发送日志
+ProductService ..> ELKAPI : 发送日志
+OrderService ..> ELKAPI : 发送日志
+PaymentService ..> ELKAPI : 发送日志
+
+UserService ..> ZipkinAPI : 追踪链路
+ProductService ..> ZipkinAPI : 追踪链路
+OrderService ..> ZipkinAPI : 追踪链路
+PaymentService ..> ZipkinAPI : 追踪链路
+
+' ========================================
+' 说明注释
+' ========================================
+note right of OrderService
+  **核心业务服务**
+  需要调用商品服务
+  获取库存信息
+end note
+
+note right of PaymentService
+  **核心业务服务**
+  需要调用订单服务
+  更新订单状态
+end note
+
+legend right
+  **接口图例**
+  |= 符号 |= 说明 |
+  | <&circle> | 提供接口 (Provided Interface) |
+  | <&arrow-circle-right> | 需求接口 (Required Interface) |
+  | ──> | 同步调用 (HTTP) |
+  | ··> | 依赖/使用 |
+  
+  **构件类型**
+  |= 标记 |= 说明 |
+  | <<subsystem>> | 子系统 |
+  | <<client>> | 客户端 |
+  | <<layer>> | 架构层 |
+  | <<infrastructure>> | 基础设施 |
+  | <<database>> | 数据库 |
+  | <<middleware>> | 中间件 |
+  | <<monitor>> | 监控组件 |
+  
+  **接口说明**
+  - **User API**: 用户注册、登录、信息管理
+  - **Product API**: 商品查询、库存检查
+  - **Order API**: 订单创建、查询、状态更新
+  - **Payment API**: 支付处理、支付查询
+end legend
+
+@enduml
+
+
+

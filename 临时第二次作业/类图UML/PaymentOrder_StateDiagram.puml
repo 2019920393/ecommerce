@@ -1,0 +1,107 @@
+@startuml PaymentOrder_StateDiagram
+
+!theme plain
+
+' ============================
+' 中文字体配置（防止导出时中文乱码）
+' ============================
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 12
+
+title PaymentOrder（支付订单）状态图 (UML 2.5)
+
+[*] --> PENDING : 创建支付订单\n/生成支付流水号\n/记录订单金额\n/选择支付方式\n/设置过期时间(15分钟)
+
+state "待支付\nPENDING" as PENDING {
+    state "等待支付结果" as Waiting
+    state "调用支付网关" as Calling
+    state "等待回调" as WaitingCallback
+    
+    [*] --> Calling
+    Calling --> WaitingCallback : 支付请求已发送
+    WaitingCallback --> Waiting : 等待回调
+}
+
+PENDING --> SUCCESS : 支付成功回调\n/记录支付时间\n/记录交易详情\n/触发后续操作
+
+PENDING --> FAILED : 支付失败回调\n/记录失败原因\n/记录交易详情
+
+PENDING --> FAILED : 支付超时(15分钟)\n/记录超时原因
+
+state "支付成功\nSUCCESS" as SUCCESS {
+    state "已完成支付" as PaymentDone
+    
+    [*] --> PaymentDone
+    
+    PaymentDone : entry / 更新订单状态
+    PaymentDone : entry / 扣减库存
+    PaymentDone : entry / 清空购物车
+    PaymentDone : entry / 生成支付记录
+    PaymentDone : do / 触发发货通知
+}
+
+state "支付失败\nFAILED" as FAILED {
+    state "支付已失败" as PaymentFailed
+    
+    [*] --> PaymentFailed
+    
+    PaymentFailed : entry / 取消订单
+    PaymentFailed : entry / 释放库存
+    PaymentFailed : entry / 生成失败记录
+    PaymentFailed : do / 通知用户
+}
+
+SUCCESS --> [*] : 归档(30天后)
+FAILED --> [*] : 归档(30天后)
+
+note right of PENDING
+  **进入条件**:
+  - 订单状态为待支付
+  - 订单未超时
+  
+  **内部转换**:
+  - 调用支付网关
+  - 等待支付回调
+  - 检查支付超时
+  
+  **退出条件**:
+  - 支付成功回调
+  - 支付失败回调
+  - 支付超时(15分钟)
+end note
+
+note right of SUCCESS
+  **终止状态**
+  不可逆转
+  
+  **内部动作**:
+  - entry: 进入状态时执行
+  - do: 状态持续期间执行
+  
+  **触发的操作**:
+  1. 更新订单状态
+  2. 扣减库存
+  3. 清空购物车
+  4. 生成支付记录
+  5. 触发发货通知
+end note
+
+note bottom of FAILED
+  **终止状态**
+  不可逆转
+  
+  **失败原因**:
+  - 余额不足
+  - 网络超时
+  - 支付取消
+  - 风控拦截
+  
+  **补偿操作**:
+  - 取消订单
+  - 释放库存
+  - 通知用户
+end note
+
+@enduml
+
+

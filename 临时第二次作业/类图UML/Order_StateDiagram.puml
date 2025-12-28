@@ -1,0 +1,98 @@
+@startuml Order_StateDiagram
+
+!theme plain
+
+' ============================
+' 中文字体配置（防止导出时中文乱码）
+' ============================
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 12
+
+title Order（订单）状态图 (UML 2.5)
+
+[*] --> PENDING_PAYMENT : 创建订单\n[库存充足]\n/生成订单号\n/预扣库存\n/设置超时时间
+
+state "待支付\nPENDING_PAYMENT" as PENDING_PAYMENT {
+    state "等待用户支付" as Waiting
+    state "检查超时" as Checking
+    
+    Waiting --> Checking : 定时检查
+    Checking --> Waiting : [未超时]
+}
+
+PENDING_PAYMENT --> PENDING_SHIPMENT : 支付成功\n/更新支付时间\n/扣减库存\n/清空购物车
+
+PENDING_PAYMENT --> CANCELLED : 支付超时(30分钟)\n/释放库存
+PENDING_PAYMENT --> CANCELLED : 用户主动取消\n/释放库存
+PENDING_PAYMENT --> CANCELLED : 支付失败\n/释放库存
+
+state "待发货\nPENDING_SHIPMENT" as PENDING_SHIPMENT {
+    state "等待商家发货" as WaitingShip
+}
+
+PENDING_SHIPMENT --> PENDING_RECEIPT : 商家发货\n/更新物流信息\n/发送通知
+
+PENDING_SHIPMENT --> CANCELLED : 商家取消订单\n[特殊情况]\n/退款\n/恢复库存
+
+state "待收货\nPENDING_RECEIPT" as PENDING_RECEIPT {
+    state "配送中" as Shipping
+    state "等待确认收货" as WaitingConfirm
+    
+    Shipping --> WaitingConfirm : 送达
+}
+
+PENDING_RECEIPT --> COMPLETED : 用户确认收货\n/记录收货时间\n/结束交易
+
+PENDING_RECEIPT --> COMPLETED : 自动确认收货(7天)\n/记录收货时间
+
+state "已完成\nCOMPLETED" as COMPLETED {
+    state "交易成功" as Success
+    state "可评价" as CanReview
+    
+    Success --> CanReview : 订单完成
+}
+
+COMPLETED --> [*] : 订单归档(30天后)
+
+state "已取消\nCANCELLED" as CANCELLED {
+    state "已取消" as Canceled
+}
+
+CANCELLED --> [*] : 订单归档(30天后)
+
+note right of PENDING_PAYMENT
+  **进入条件**:
+  - 用户提交订单
+  - 库存校验通过
+  - 地址信息完整
+  
+  **退出条件**:
+  - 支付成功
+  - 超时(30分钟)
+  - 主动取消
+  - 支付失败
+end note
+
+note right of PENDING_SHIPMENT
+  **进入条件**:
+  - 支付成功
+  - 库存已扣减
+  
+  **退出条件**:
+  - 商家发货
+  - 商家取消(异常)
+end note
+
+note right of COMPLETED
+  **终止状态**
+  不可逆转
+  
+  **后续操作**:
+  - 用户评价
+  - 售后服务
+  - 订单归档
+end note
+
+@enduml
+
+

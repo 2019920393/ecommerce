@@ -1,0 +1,202 @@
+@startuml UC10_OrderPayment_Sequence
+
+!theme plain
+
+' ============================
+' 中文字体配置（防止导出时中文乱码）
+' ============================
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+title UC10: 订单支付 - 顺序图 (UML 2.5)
+
+actor User as "用户"
+participant "<<Boundary>>\n:PaymentController" as Controller
+participant "<<Control>>\n:PaymentService" as PaymentService
+participant "<<Entity>>\n:Order" as Order
+participant "<<Entity>>\n:PaymentOrder" as PaymentOrder
+participant "<<External>>\n:PaymentGateway" as Gateway
+participant "<<Control>>\n:PaymentCallbackHandler" as CallbackHandler
+participant "<<Control>>\n:OrderService" as OrderService
+participant "<<Control>>\n:InventoryService" as InventoryService
+participant "<<Entity>>\n:Inventory" as Inventory
+participant "<<Entity>>\n:ShoppingCart" as Cart
+participant "<<Entity>>\n:PaymentRecord" as Record
+
+== 1. 进入支付页面 ==
+
+User -> Controller: 点击"去支付"(orderNumber)
+activate Controller
+
+Controller -> PaymentService: getOrderForPayment(orderNumber)
+activate PaymentService
+
+PaymentService -> Order: findByOrderNumber(orderNumber)
+activate Order
+Order --> PaymentService: order
+deactivate Order
+
+PaymentService -> Order: isPaid()
+activate Order
+Order --> PaymentService: false
+deactivate Order
+
+PaymentService -> Order: isExpired()
+activate Order
+Order --> PaymentService: false
+deactivate Order
+
+PaymentService --> Controller: paymentPageData
+deactivate PaymentService
+
+Controller --> User: 显示支付页面(订单金额、支付方式)
+deactivate Controller
+
+== 2. 用户选择支付方式并确认 ==
+
+User -> Controller: 确认支付(orderNumber, paymentMethod)
+activate Controller
+
+Controller -> PaymentService: createPaymentOrder(orderNumber, paymentMethod)
+activate PaymentService
+
+== 3. 创建支付订单 ==
+
+PaymentService -> PaymentOrder: new PaymentOrder()
+activate PaymentOrder
+PaymentOrder --> PaymentService: paymentOrder
+
+PaymentService -> PaymentOrder: generatePaymentNumber()
+PaymentOrder --> PaymentService: paymentNumber
+
+PaymentService -> PaymentOrder: setOrderInfo(orderId, amount)
+
+PaymentService -> PaymentOrder: setPaymentMethod(paymentMethod)
+
+PaymentService -> PaymentOrder: setStatus(PENDING)
+
+PaymentService -> PaymentOrder: save()
+PaymentOrder --> PaymentService: savedPaymentOrder
+deactivate PaymentOrder
+
+== 4. 调用支付网关（模拟支付） ==
+
+PaymentService -> Gateway: processPayment(paymentNumber, amount, method)
+activate Gateway
+
+Gateway -> Gateway: 模拟支付处理(2-3秒)\n成功率90%
+
+Gateway --> PaymentService: paymentResult(success/fail)
+deactivate Gateway
+
+== 5. 处理支付回调 ==
+
+PaymentService -> CallbackHandler: handleCallback(paymentNumber, status, details)
+activate CallbackHandler
+
+alt 支付成功
+    
+    == 5.1 支付成功流程 ==
+    
+    CallbackHandler -> PaymentOrder: updateStatus(SUCCESS)
+    activate PaymentOrder
+    PaymentOrder --> CallbackHandler: updated
+    deactivate PaymentOrder
+    
+    CallbackHandler -> OrderService: updateOrderStatus(orderNumber, PENDING_SHIPMENT)
+    activate OrderService
+    OrderService -> Order: setStatus(PENDING_SHIPMENT)
+    activate Order
+    OrderService -> Order: setPayTime(now)
+    Order --> OrderService: updated
+    deactivate Order
+    OrderService --> CallbackHandler: success
+    deactivate OrderService
+    
+    CallbackHandler -> InventoryService: deductStock(orderNumber)
+    activate InventoryService
+    
+    loop 遍历订单商品
+        InventoryService -> Inventory: deductLockedStock(orderNumber)
+        activate Inventory
+        Inventory -> Inventory: 实际扣减库存
+        Inventory --> InventoryService: deducted
+        deactivate Inventory
+    end
+    
+    InventoryService --> CallbackHandler: allDeducted
+    deactivate InventoryService
+    
+    CallbackHandler -> Cart: clearPaidItems(userId, orderNumber)
+    activate Cart
+    Cart --> CallbackHandler: cleared
+    deactivate Cart
+    
+    CallbackHandler -> Record: createPaymentRecord(paymentOrder, SUCCESS)
+    activate Record
+    Record --> CallbackHandler: record
+    deactivate Record
+    
+    CallbackHandler --> PaymentService: success
+    deactivate CallbackHandler
+    
+    PaymentService --> Controller: paymentSuccess
+    deactivate PaymentService
+    
+    Controller --> User: 显示支付成功页面(流水号)
+    deactivate Controller
+
+else 支付失败
+    
+    == 5.2 支付失败流程 ==
+    
+    CallbackHandler -> PaymentOrder: updateStatus(FAILED)
+    activate PaymentOrder
+    PaymentOrder --> CallbackHandler: updated
+    deactivate PaymentOrder
+    
+    CallbackHandler -> OrderService: cancelOrder(orderNumber)
+    activate OrderService
+    OrderService -> Order: setStatus(CANCELLED)
+    activate Order
+    Order --> OrderService: cancelled
+    deactivate Order
+    OrderService --> CallbackHandler: cancelled
+    deactivate OrderService
+    
+    CallbackHandler -> InventoryService: releaseStock(orderNumber)
+    activate InventoryService
+    
+    loop 遍历订单商品
+        InventoryService -> Inventory: releaseLockedStock(orderNumber)
+        activate Inventory
+        Inventory -> Inventory: 释放预扣库存
+        Inventory --> InventoryService: released
+        deactivate Inventory
+    end
+    
+    InventoryService --> CallbackHandler: allReleased
+    deactivate InventoryService
+    
+    CallbackHandler -> Record: createPaymentRecord(paymentOrder, FAILED)
+    activate Record
+    Record --> CallbackHandler: record
+    deactivate Record
+    
+    CallbackHandler --> PaymentService: failed
+    deactivate CallbackHandler
+    
+    PaymentService --> Controller: paymentFailed(reason)
+    deactivate PaymentService
+    
+    Controller --> User: 显示支付失败页面(原因)
+    deactivate Controller
+    
+end
+
+@enduml
+
+

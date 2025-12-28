@@ -1,0 +1,224 @@
+@startuml 订单构件与支付构件架构图
+' 设置中文字体支持
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+' 设置样式
+skinparam component {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  BorderThickness 2
+  FontSize 11
+  FontStyle bold
+}
+
+skinparam interface {
+  BackgroundColor #FFFFFF
+  BorderColor #FF6F00
+  BorderThickness 2
+}
+
+skinparam package {
+  BackgroundColor #F5F5F5
+  BorderColor #757575
+  BorderThickness 1
+}
+
+skinparam shadowing false
+skinparam backgroundColor #FEFEFE
+
+' 标题
+title 订单构件与支付构件架构图（供需接口） (UML 2.5)
+center footer UML版本: UML 2.5 | 建模工具: PlantUML | 接口表示: Provided/Required Interface
+
+' ========================================
+' 订单构件 (Order Component)
+' ========================================
+component "<<subsystem>>\n订单构件\n(Order Service)" as OrderService #FF9800 {
+  component ":OrderController" as OrderCtrl
+  component ":OrderService" as OrderSvc
+}
+
+' 订单构件提供的接口（供接口）
+() "Order API\n(REST)" as OrderAPI
+OrderService -up- OrderAPI
+
+note right of OrderAPI
+  **提供的接口**
+  - createOrder() : 创建订单
+  - getOrder() : 查询订单
+  - updateOrderStatus() : 更新订单状态
+  - cancelOrder() : 取消订单
+  - listOrders() : 订单列表
+end note
+
+' 订单构件需要的接口（需接口）
+interface "Product API" as IOrderProduct
+interface "Cart API" as IOrderCart
+interface "RabbitMQ" as IOrderMQ
+
+OrderService -down-( IOrderProduct
+OrderService -down-( IOrderCart
+OrderService -down-( IOrderMQ
+
+note left of OrderService
+  **订单构件职责**
+  - 订单创建与管理
+  - 订单状态流转
+  - 订单查询与列表
+  - 协调外部服务
+  
+  **端口**: 8083
+  **数据库**: order_db
+end note
+
+' ========================================
+' 支付构件 (Payment Component)
+' ========================================
+component "<<subsystem>>\n支付构件\n(Payment Service)" as PaymentService #9C27B0 {
+  component ":PaymentController" as PaymentCtrl
+  component ":PaymentService" as PaymentSvc
+  component ":PaymentCallbackHandler" as CallbackHandler
+}
+
+' 支付构件提供的接口（供接口）
+() "Payment API\n(REST)" as PaymentAPI
+PaymentService -up- PaymentAPI
+
+() "Payment Callback\n(Webhook)" as PaymentCallback
+PaymentService -right- PaymentCallback
+
+note right of PaymentAPI
+  **提供的接口**
+  - createPayment() : 创建支付
+  - getPayment() : 查询支付
+  - cancelPayment() : 取消支付
+  - handleCallback() : 处理回调
+end note
+
+' 支付构件需要的接口（需接口）
+interface "Order API" as IPaymentOrder
+interface "RabbitMQ" as IPaymentMQ
+interface "Third Party Payment" as IThirdParty
+
+PaymentService -down-( IPaymentOrder
+PaymentService -down-( IPaymentMQ
+PaymentService -left-( IThirdParty
+
+note left of PaymentService
+  **支付构件职责**
+  - 支付订单创建
+  - 支付处理与回调
+  - 支付状态管理
+  - 第三方支付对接
+  
+  **端口**: 8084
+  **数据库**: payment_db
+end note
+
+' ========================================
+' 外部构件与基础设施
+' ========================================
+
+' 商品构件（外部依赖）
+component "<<subsystem>>\n商品构件\n(Product Service)" as ProductService #90EE90 {
+  component ":ProductController" as ProductCtrl
+  component ":ProductService" as ProductSvc
+}
+
+() "Product API\n(REST)" as ProductAPI
+ProductService -up- ProductAPI
+
+' 购物车构件（外部依赖）
+component "<<subsystem>>\n购物车构件\n(Cart Service)" as CartService #90EE90 {
+  component ":CartController" as CartCtrl
+  component ":CartService" as CartSvc
+}
+
+() "Cart API\n(REST)" as CartAPI
+CartService -up- CartAPI
+
+' 消息队列（基础设施）
+component "<<middleware>>\nRabbitMQ" as RabbitMQ #C5E1A5 {
+}
+
+() "Message Queue\nService" as MQAPI
+RabbitMQ -up- MQAPI
+
+' 第三方支付（外部系统）
+component "<<external>>\n第三方支付\n(Alipay/WeChat)" as ThirdParty #FFCCBC {
+}
+
+() "Third Party\nPayment API" as ThirdPartyAPI
+ThirdParty -up- ThirdPartyAPI
+
+() "Payment Callback\nWebhook" as ThirdPartyCallback
+ThirdParty -down- ThirdPartyCallback
+
+' ========================================
+' 接口连接关系（供需匹配）
+' ========================================
+
+' 订单构件需要的接口 -> 外部构件提供的接口
+IOrderProduct ..> ProductAPI : 调用\n(库存预扣/扣减)
+IOrderCart ..> CartAPI : 调用\n(状态标记/清空)
+IOrderMQ ..> MQAPI : 发送\n(订单消息)
+
+' 支付构件需要的接口 -> 外部构件提供的接口
+IPaymentOrder ..> OrderAPI : 调用\n(查询/更新订单)
+IPaymentMQ ..> MQAPI : 发送\n(支付成功消息)
+IThirdParty ..> ThirdPartyAPI : 调用\n(发起支付)
+
+' 第三方支付回调 -> 支付构件
+ThirdPartyCallback ..> PaymentCallback : 回调\n(支付结果)
+
+' ========================================
+' 构件间交互说明
+' ========================================
+note as N1
+  **构件间交互流程**
+  
+  **UC9 订单创建**:
+  1. 订单构件调用商品构件（库存预扣）
+  2. 订单构件调用购物车构件（状态标记）
+  3. 使用Seata AT保证强一致性
+  
+  **UC10 订单支付**:
+  1. 支付构件调用订单构件（查询订单）
+  2. 支付构件调用第三方支付（发起支付）
+  3. 第三方支付回调支付构件（支付结果）
+  4. 支付构件发送消息到RabbitMQ
+  5. 订单构件消费消息（更新订单状态）
+  6. 订单构件调用商品构件（库存扣减）
+  7. 订单构件调用购物车构件（清空购物车）
+  8. 使用消息队列保证最终一致性
+end note
+
+' ========================================
+' 图例说明
+' ========================================
+legend right
+  **接口图例**
+  |= 符号 |= 说明 |
+  | <&circle> () | 提供接口 (Provided Interface) |
+  | <&arrow-circle-right> interface | 需求接口 (Required Interface) |
+  | ──> | 同步调用 (HTTP) |
+  | ··> | 依赖/使用 |
+  
+  **构件类型**
+  |= 标记 |= 说明 |
+  | <<subsystem>> | 子系统/构件 |
+  | <<middleware>> | 中间件 |
+  | <<external>> | 外部系统 |
+  
+  **核心构件**
+  - **订单构件**: 完成订单创建、查询、状态管理功能
+  - **支付构件**: 完成支付处理、回调处理、第三方对接功能
+  
+  **接口说明**
+  - **提供接口(Provided)**: 构件对外提供的服务
+  - **需求接口(Required)**: 构件依赖的外部服务
+  - 供需接口通过虚线连接，实现解耦
+end legend
+
+@enduml

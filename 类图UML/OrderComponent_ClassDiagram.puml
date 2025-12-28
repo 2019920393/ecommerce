@@ -1,0 +1,279 @@
+@startuml OrderComponent_ClassDiagram
+
+!theme plain
+
+' ============================
+' 中文字体配置
+' ============================
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+title 订单构件内部类图
+
+' ============================
+' 表示层
+' ============================
+package "表示层 (Presentation Layer)" {
+    class OrderController <<Boundary>> {
+        - orderService: OrderService
+        + createOrder(request: CreateOrderRequest): ResponseEntity<CreateOrderResponse>
+        + getOrderDetail(orderNumber: String): ResponseEntity<OrderDetailResponse>
+        + cancelOrder(orderNumber: String): ResponseEntity<Void>
+        + getOrderList(userId: Long, page: Integer, size: Integer): ResponseEntity<PageResponse>
+    }
+    
+    class CreateOrderRequest <<DTO>> {
+        + userId: Long
+        + cartItemIds: List<Long>
+        + addressId: Long
+        + remark: String
+    }
+    
+    class CreateOrderResponse <<DTO>> {
+        + orderNumber: String
+        + totalAmount: BigDecimal
+        + createTime: LocalDateTime
+        + expireTime: LocalDateTime
+        + status: String
+    }
+    
+    class OrderDetailResponse <<DTO>> {
+        + orderNumber: String
+        + userId: Long
+        + totalAmount: BigDecimal
+        + status: String
+        + createTime: LocalDateTime
+        + payTime: LocalDateTime
+        + expireTime: LocalDateTime
+        + shippingAddress: ShippingAddressDTO
+        + items: List<OrderItemDTO>
+    }
+}
+
+' ============================
+' 业务逻辑层
+' ============================
+package "业务逻辑层 (Business Logic Layer)" {
+    class OrderService <<Control>> {
+        - orderRepository: OrderRepository
+        - inventoryService: InventoryService
+        - cartServiceClient: CartServiceClient
+        - productServiceClient: ProductServiceClient
+        - userServiceClient: UserServiceClient
+        + createOrder(request: CreateOrderRequest): CreateOrderResponse
+        + getOrderDetail(orderNumber: String): OrderDetailResponse
+        + updateOrderStatus(orderNumber: String, status: OrderStatus): void
+        + cancelOrder(orderNumber: String): void
+        + handlePaymentSuccess(message: PaymentSuccessMessage): void
+        - generateOrderNumber(): String
+        - calculateTotalAmount(items: List<OrderItem>): BigDecimal
+        - validateStock(productList: List<ProductQuantity>): void
+    }
+    
+    class OrderStatusManager <<Control>> {
+        + validateStatusTransition(from: OrderStatus, to: OrderStatus): boolean
+        + getNextStatus(current: OrderStatus): List<OrderStatus>
+    }
+    
+    class OrderTimeoutHandler <<Control>> {
+        - orderRepository: OrderRepository
+        - inventoryService: InventoryService
+        + scanExpiredOrders(): void
+        + cancelExpiredOrder(order: Order): void
+    }
+}
+
+' ============================
+' 领域层
+' ============================
+package "领域层 (Domain Layer)" {
+    class Order <<Entity>> {
+        - id: Long
+        - orderNumber: String
+        - userId: Long
+        - totalAmount: BigDecimal
+        - status: OrderStatus
+        - createTime: LocalDateTime
+        - payTime: LocalDateTime
+        - expireTime: LocalDateTime
+        - receiverName: String
+        - receiverPhone: String
+        - province: String
+        - city: String
+        - district: String
+        - detailAddress: String
+        - remark: String
+        - items: List<OrderItem>
+        + generateOrderNumber(): String
+        + setOrderInfo(userId: Long, address: Address, totalAmount: BigDecimal): void
+        + setStatus(status: OrderStatus): void
+        + setExpireTime(minutes: Integer): void
+        + addOrderItem(item: OrderItem): void
+        + calculateTotalAmount(): BigDecimal
+        + isPaid(): boolean
+        + isExpired(): boolean
+        + canCancel(): boolean
+    }
+    
+    class OrderItem <<Entity>> {
+        - id: Long
+        - orderId: Long
+        - productId: Long
+        - productName: String
+        - productImage: String
+        - price: BigDecimal
+        - quantity: Integer
+        - subtotal: BigDecimal
+        + createFromCartItem(cartItem: CartItem): OrderItem
+        + calculateSubtotal(): BigDecimal
+    }
+    
+    enum OrderStatus <<Enumeration>> {
+        PENDING_PAYMENT
+        PENDING_SHIPMENT
+        SHIPPED
+        COMPLETED
+        CANCELLED
+    }
+    
+    class ShippingAddress <<Value Object>> {
+        - receiverName: String
+        - receiverPhone: String
+        - province: String
+        - city: String
+        - district: String
+        - detailAddress: String
+        + getFullAddress(): String
+    }
+}
+
+' ============================
+' 数据访问层
+' ============================
+package "数据访问层 (Data Access Layer)" {
+    interface OrderRepository <<Repository>> {
+        + save(order: Order): Order
+        + findByOrderNumber(orderNumber: String): Order
+        + findByUserId(userId: Long, page: Page): Page<Order>
+        + findByStatus(status: OrderStatus, page: Page): Page<Order>
+        + findExpiredOrders(expireTime: LocalDateTime): List<Order>
+        + update(order: Order): void
+        + delete(orderId: Long): void
+    }
+    
+    class OrderRepositoryImpl <<Repository>> {
+        - orderMapper: OrderMapper
+        - orderItemMapper: OrderItemMapper
+        + save(order: Order): Order
+        + findByOrderNumber(orderNumber: String): Order
+        + findByUserId(userId: Long, page: Page): Page<Order>
+        + findByStatus(status: OrderStatus, page: Page): Page<Order>
+        + findExpiredOrders(expireTime: LocalDateTime): List<Order>
+        + update(order: Order): void
+        + delete(orderId: Long): void
+    }
+    
+    interface OrderMapper <<Mapper>> {
+        + insert(order: Order): int
+        + selectByOrderNumber(orderNumber: String): Order
+        + selectByUserId(userId: Long): List<Order>
+        + selectByStatus(status: String): List<Order>
+        + selectExpiredOrders(expireTime: LocalDateTime): List<Order>
+        + updateById(order: Order): int
+        + deleteById(orderId: Long): int
+    }
+    
+    interface OrderItemMapper <<Mapper>> {
+        + batchInsert(items: List<OrderItem>): int
+        + selectByOrderId(orderId: Long): List<OrderItem>
+        + deleteByOrderId(orderId: Long): int
+    }
+}
+
+' ============================
+' 外部服务接口
+' ============================
+package "外部服务接口 (External Service Interface)" {
+    interface InventoryService <<External>> {
+        + batchCheckStock(productList: List<ProductQuantity>): StockCheckResult
+        + lockStock(orderNumber: String, productList: List<ProductQuantity>): StockLockResult
+        + deductStock(orderNumber: String): StockDeductResult
+        + releaseStock(orderNumber: String): StockReleaseResult
+    }
+    
+    interface CartServiceClient <<External>> {
+        + getCartItems(userId: Long, cartItemIds: List<Long>): List<CartItem>
+        + clearPaidItems(userId: Long, orderNumber: String): void
+    }
+    
+    interface ProductServiceClient <<External>> {
+        + getProductDetails(productIds: List<Long>): List<Product>
+    }
+    
+    interface UserServiceClient <<External>> {
+        + getUserAddresses(userId: Long): List<Address>
+        + getAddressById(addressId: Long): Address
+    }
+}
+
+' ============================
+' 消息队列
+' ============================
+package "消息队列 (Message Queue)" {
+    class PaymentSuccessListener <<Consumer>> {
+        - orderService: OrderService
+        + onMessage(message: PaymentSuccessMessage): void
+    }
+    
+    class PaymentSuccessMessage <<Message>> {
+        + paymentNumber: String
+        + orderNumber: String
+        + userId: Long
+        + amount: BigDecimal
+        + paymentMethod: String
+        + status: String
+        + payTime: LocalDateTime
+    }
+}
+
+' ============================
+' 关系
+' ============================
+
+' 表示层依赖业务逻辑层
+OrderController --> OrderService
+OrderController ..> CreateOrderRequest
+OrderController ..> CreateOrderResponse
+OrderController ..> OrderDetailResponse
+
+' 业务逻辑层依赖领域层
+OrderService --> Order
+OrderService --> OrderItem
+OrderService --> OrderStatus
+OrderService --> OrderStatusManager
+OrderService --> OrderTimeoutHandler
+
+' 业务逻辑层依赖数据访问层
+OrderService --> OrderRepository
+
+' 业务逻辑层依赖外部服务
+OrderService --> InventoryService
+OrderService --> CartServiceClient
+OrderService --> ProductServiceClient
+OrderService --> UserServiceClient
+
+' 领域层关系
+Order "1" *-- "many" OrderItem : contains
+Order --> OrderStatus
+Order --> ShippingAddress
+
+' 数据访问层实现
+OrderRepositoryImpl ..|> OrderRepository
+OrderRepositoryImpl --> OrderMapper
+OrderRepositoryImpl --> OrderItemMapper
+
+' 消息队列
+PaymentSuccessListener --> OrderService
+PaymentSuccessListener ..> PaymentSuccessMessage
+
+@enduml

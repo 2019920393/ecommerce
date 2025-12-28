@@ -1,0 +1,395 @@
+@startuml UC9_UC10_ClassDiagram
+
+' ============================
+' 中文字体配置（防止导出时中文乱码）
+' ============================
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 12
+
+' 设置样式
+skinparam classAttributeIconSize 0
+skinparam class {
+    BackgroundColor<<Entity>> LightBlue
+    BackgroundColor<<Enum>> LightGreen
+    BackgroundColor<<Control>> LightYellow
+    BorderColor Black
+    ArrowColor Black
+}
+
+' ============================
+' 实体类 (Entity Classes)
+' ============================
+
+class User <<Entity>> {
+    - userId: Long
+    - username: String
+    - password: String
+    - phone: String
+    - email: String
+    - nickname: String
+    - avatar: String
+    - role: String
+    - status: String
+    - createTime: DateTime
+    - updateTime: DateTime
+    --
+    + register(username, password, phone): User
+    + login(username, password): Boolean
+    + updateProfile(nickname, avatar): void
+    + changePassword(oldPassword, newPassword): Boolean
+    + isAdmin(): Boolean
+    + isActive(): Boolean
+}
+
+class Order <<Entity>> {
+    - orderId: Long
+    - orderNumber: String
+    - userId: Long
+    - recipientName: String
+    - recipientPhone: String
+    - shippingAddress: String
+    - province: String
+    - city: String
+    - district: String
+    - detailAddress: String
+    - totalAmount: BigDecimal
+    - productAmount: BigDecimal
+    - shippingFee: BigDecimal
+    - discount: BigDecimal
+    - status: OrderStatus
+    - createTime: DateTime
+    - payTime: DateTime
+    - expireTime: DateTime
+    - cancelTime: DateTime
+    - remark: String
+    --
+    + createOrder(userId, cartItems, addressId): Order
+    + calculateTotalAmount(): BigDecimal
+    + updateStatus(newStatus): void
+    + cancel(): void
+    + isPaid(): Boolean
+    + isExpired(): Boolean
+    + canCancel(): Boolean
+    + getOrderItems(): List<OrderItem>
+}
+
+class OrderItem <<Entity>> {
+    - itemId: Long
+    - orderId: Long
+    - productId: Long
+    - productName: String
+    - productImage: String
+    - specification: String
+    - unitPrice: BigDecimal
+    - quantity: Integer
+    - subtotal: BigDecimal
+    --
+    + calculateSubtotal(): BigDecimal
+    + createFromCartItem(cartItem): OrderItem
+    + createFromProduct(product, quantity): OrderItem
+}
+
+class Product <<Entity>> {
+    - productId: Long
+    - productName: String
+    - categoryId: Long
+    - price: BigDecimal
+    - originalPrice: BigDecimal
+    - description: String
+    - mainImage: String
+    - images: String
+    - specification: String
+    - stock: Integer
+    - sales: Integer
+    - status: String
+    - createTime: DateTime
+    - updateTime: DateTime
+    --
+    + isAvailable(): Boolean
+    + hasStock(quantity): Boolean
+    + updateStock(quantity): void
+    + getDisplayPrice(): BigDecimal
+    + incrementSales(quantity): void
+}
+
+class ShoppingCart <<Entity>> {
+    - cartId: Long
+    - userId: Long
+    - createTime: DateTime
+    - updateTime: DateTime
+    --
+    + addItem(productId, quantity): CartItem
+    + removeItem(cartItemId): void
+    + updateItemQuantity(cartItemId, quantity): void
+    + clear(): void
+    + getItems(): List<CartItem>
+    + calculateTotalPrice(): BigDecimal
+    + getItemCount(): Integer
+}
+
+class CartItem <<Entity>> {
+    - cartItemId: Long
+    - cartId: Long
+    - productId: Long
+    - productName: String
+    - productImage: String
+    - price: BigDecimal
+    - quantity: Integer
+    - selected: Boolean
+    - addTime: DateTime
+    --
+    + updateQuantity(quantity): void
+    + calculateSubtotal(): BigDecimal
+    + select(): void
+    + unselect(): void
+    + isExpired(): Boolean
+}
+
+class ShippingAddress <<Entity>> {
+    - addressId: Long
+    - userId: Long
+    - recipientName: String
+    - phone: String
+    - province: String
+    - city: String
+    - district: String
+    - detailAddress: String
+    - postalCode: String
+    - isDefault: Boolean
+    - createTime: DateTime
+    - updateTime: DateTime
+    --
+    + add(userId, recipientName, ...): ShippingAddress
+    + update(recipientName, phone, ...): void
+    + delete(): void
+    + setDefault(): void
+    + getFullAddress(): String
+}
+
+class Inventory <<Entity>> {
+    - inventoryId: Long
+    - productId: Long
+    - totalStock: Integer
+    - availableStock: Integer
+    - lockedStock: Integer
+    - version: Integer
+    - updateTime: DateTime
+    --
+    + checkStock(quantity): Boolean
+    + lockStock(quantity, orderNumber): Boolean
+    + deductStock(orderNumber): Boolean
+    + releaseStock(orderNumber): Boolean
+    + calculateAvailableStock(): Integer
+    + addStock(quantity): void
+}
+
+class PaymentOrder <<Entity>> {
+    - paymentId: Long
+    - paymentNumber: String
+    - orderId: Long
+    - orderNumber: String
+    - amount: BigDecimal
+    - paymentMethod: PaymentMethod
+    - status: PaymentStatus
+    - createTime: DateTime
+    - payTime: DateTime
+    - expireTime: DateTime
+    - transactionDetails: String
+    --
+    + create(orderId, amount, paymentMethod): PaymentOrder
+    + updateStatus(newStatus): void
+    + isExpired(): Boolean
+    + canPay(): Boolean
+    + recordPaymentResult(success, details): void
+}
+
+class PaymentRecord <<Entity>> {
+    - recordId: Long
+    - paymentNumber: String
+    - userId: Long
+    - orderId: Long
+    - amount: BigDecimal
+    - paymentMethod: PaymentMethod
+    - status: PaymentStatus
+    - payTime: DateTime
+    - transactionId: String
+    - transactionDetails: String
+    - createTime: DateTime
+    --
+    + create(paymentOrder, status, details): PaymentRecord
+    + query(userId, startTime, endTime): List<PaymentRecord>
+    + queryByOrderId(orderId): List<PaymentRecord>
+}
+
+' ============================
+' 枚举类 (Enum Classes)
+' ============================
+
+enum OrderStatus <<Enum>> {
+    PENDING_PAYMENT(1, "待支付")
+    PENDING_SHIPMENT(2, "待发货")
+    PENDING_RECEIPT(3, "待收货")
+    COMPLETED(4, "已完成")
+    CANCELLED(5, "已取消")
+    --
+    - code: Integer
+    - description: String
+    --
+    + getCode(): Integer
+    + getDescription(): String
+    + canTransitionTo(newStatus): Boolean
+    + valueOf(code): OrderStatus
+}
+
+enum PaymentStatus <<Enum>> {
+    PENDING(1, "待支付")
+    SUCCESS(2, "支付成功")
+    FAILED(3, "支付失败")
+    --
+    - code: Integer
+    - description: String
+    --
+    + getCode(): Integer
+    + getDescription(): String
+    + isSuccess(): Boolean
+    + isFailed(): Boolean
+}
+
+enum PaymentMethod <<Enum>> {
+    ALIPAY(1, "支付宝")
+    WECHAT(2, "微信支付")
+    BANK_CARD(3, "银行卡")
+    MOCK(99, "模拟支付")
+    --
+    - code: Integer
+    - description: String
+    --
+    + getCode(): Integer
+    + getDescription(): String
+    + isMock(): Boolean
+}
+
+' ============================
+' 控制类 (Control Classes)
+' ============================
+
+class OrderService <<Control>> {
+    - orderRepository: OrderRepository
+    - inventoryService: InventoryService
+    - cartService: CartService
+    - transactionManager: TransactionManager
+    --
+    + createOrder(userId, cartItemIds, addressId): Order
+    + validateOrder(userId, cartItems, addressId): Boolean
+    + updateOrderStatus(orderNumber, newStatus): void
+    + cancelOrder(orderNumber): void
+    + queryUserOrders(userId, status, pageNum, pageSize): Page<Order>
+    + getOrderDetail(orderNumber): Order
+    + checkTimeout(): void
+    + autoCancel(orderNumber): void
+}
+
+class InventoryService <<Control>> {
+    - inventoryRepository: InventoryRepository
+    - inventoryLockRepository: InventoryLockRepository
+    - retryCount: Integer
+    --
+    + checkStock(productId, quantity): Boolean
+    + batchCheckStock(items): Map<Long, Boolean>
+    + lockStock(productId, quantity, orderNumber): Boolean
+    + deductStock(orderNumber): Boolean
+    + releaseStock(orderNumber): Boolean
+    + updateStock(productId, quantity): void
+    + getAvailableStock(productId): Integer
+    + autoReleaseExpiredLocks(): void
+}
+
+class PaymentService <<Control>> {
+    - paymentOrderRepository: PaymentOrderRepository
+    - paymentRecordRepository: PaymentRecordRepository
+    - orderService: OrderService
+    - mockPaymentSuccessRate: Double
+    --
+    + createPaymentOrder(orderNumber, paymentMethod): PaymentOrder
+    + processPayment(paymentNumber): Boolean
+    + queryPaymentStatus(paymentNumber): PaymentStatus
+    + getPaymentRecord(paymentNumber): PaymentRecord
+    + queryUserPayments(userId, startTime, endTime): List<PaymentRecord>
+    + retryPayment(paymentNumber): Boolean
+}
+
+class PaymentCallbackHandler <<Control>> {
+    - paymentService: PaymentService
+    - orderService: OrderService
+    - inventoryService: InventoryService
+    - cartService: CartService
+    - messageQueue: MessageQueue
+    - transactionManager: TransactionManager
+    --
+    + handleCallback(paymentNumber, status, payTime, details): void
+    + handleSuccess(paymentNumber): void
+    + handleFailure(paymentNumber): void
+    + syncOrderStatus(orderNumber, paymentStatus): void
+    + notifyUser(userId, message): void
+    + rollbackOnFailure(orderNumber): void
+}
+
+' ============================
+' 类之间的关系（UML 2.5标准 - 4种关系）
+' ============================
+
+' 1. 关联关系 (Association) - 实线
+' 表示类之间有持久性的结构关系
+User "1" -- "0..*" Order : 创建 >
+User "1" -- "1" ShoppingCart : 拥有 >
+User "1" -- "0..*" ShippingAddress : 拥有 >
+Order "1" -- "1" PaymentOrder : 对应 >
+PaymentOrder "1" -- "1..*" PaymentRecord : 产生 >
+Product "1" -- "1" Inventory : 对应 >
+
+' 2. 聚合关系 (Aggregation) - 空心菱形
+' 表示整体与部分的关系，但部分可以独立存在
+Product "1" o-- "0..*" CartItem : 添加到购物车 >
+Product "1" o-- "0..*" OrderItem : 生成订单明细 >
+
+' 3. 组合关系 (Composition) - 实心菱形
+' 表示强生命周期依赖，整体销毁时部分也销毁
+Order "1" *-- "1..*" OrderItem : 包含 >
+ShoppingCart "1" *-- "0..*" CartItem : 包含 >
+
+' 4. 依赖关系 (Dependency) - 虚线箭头
+' 表示一个类使用另一个类，是临时性的弱关系
+
+' 4.1 实体类对枚举的依赖
+Order ..> OrderStatus : <<use>>
+PaymentOrder ..> PaymentStatus : <<use>>
+PaymentOrder ..> PaymentMethod : <<use>>
+PaymentRecord ..> PaymentStatus : <<use>>
+PaymentRecord ..> PaymentMethod : <<use>>
+
+' 4.2 控制类对实体类的依赖
+OrderService ..> Order : <<create>>
+OrderService ..> OrderItem : <<create>>
+OrderService ..> User : <<use>>
+OrderService ..> ShippingAddress : <<use>>
+
+InventoryService ..> Inventory : <<manage>>
+InventoryService ..> Product : <<use>>
+
+PaymentService ..> PaymentOrder : <<create>>
+PaymentService ..> PaymentRecord : <<create>>
+PaymentService ..> Order : <<use>>
+
+PaymentCallbackHandler ..> PaymentOrder : <<use>>
+PaymentCallbackHandler ..> Order : <<use>>
+PaymentCallbackHandler ..> Inventory : <<use>>
+PaymentCallbackHandler ..> ShoppingCart : <<use>>
+
+' 4.3 控制类之间的依赖
+OrderService ..> InventoryService : <<call>>
+PaymentService ..> OrderService : <<call>>
+PaymentCallbackHandler ..> PaymentService : <<call>>
+PaymentCallbackHandler ..> OrderService : <<call>>
+PaymentCallbackHandler ..> InventoryService : <<call>>
+
+@enduml

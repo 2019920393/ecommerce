@@ -1,0 +1,229 @@
+@startuml 云原生电商平台系统架构构件图
+' 设置中文字体支持
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 12
+
+' 设置构件样式
+skinparam component {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  BorderThickness 2
+  FontSize 12
+  FontStyle bold
+}
+
+' 设置接口样式
+skinparam interface {
+  BackgroundColor #FFFFFF
+  BorderColor #FF6F00
+  BorderThickness 2
+}
+
+' 设置数据库样式
+skinparam database {
+  BackgroundColor #FFF3E0
+  BorderColor #F57C00
+  BorderThickness 2
+}
+
+' 设置包样式
+skinparam package {
+  BackgroundColor #F5F5F5
+  BorderColor #616161
+  BorderThickness 2
+  FontSize 13
+  FontStyle bold
+}
+
+skinparam shadowing false
+skinparam backgroundColor #FEFEFE
+
+' 标题
+title 云原生微服务电商平台 - 系统架构构件图 (UML 2.5)
+center footer UML版本: UML 2.5 | 建模工具: PlantUML | 系统架构: 微服务 + 容器化
+
+' ===== 客户端层 =====
+package "客户端层 (Client Layer)" {
+  [Web浏览器] as WebClient #LightBlue
+  [移动应用] as MobileClient #LightBlue
+}
+
+' ===== API网关层 =====
+package "网关层 (Gateway Layer)" {
+  component "API Gateway\n(Spring Cloud Gateway)" as Gateway #90EE90 {
+    portin "HTTP/HTTPS" as GatewayIn
+    portout "路由转发" as GatewayOut
+  }
+}
+
+' ===== 微服务层 =====
+package "微服务层 (Microservices Layer)" {
+  
+  component "用户服务\n(User Service)" as UserService #FFEB3B {
+    portin "REST API" as UserIn
+    portout "MySQL" as UserDB
+    portout "Redis" as UserCache
+  }
+  
+  component "商品服务\n(Product Service)" as ProductService #FFEB3B {
+    portin "REST API" as ProductIn
+    portout "MySQL" as ProductDB
+    portout "Redis" as ProductCache
+  }
+  
+  component "订单服务\n(Order Service)" as OrderService #FF9800 {
+    portin "REST API" as OrderIn
+    portout "MySQL" as OrderDB
+    portout "Redis" as OrderCache
+    portout "RabbitMQ" as OrderMQ
+    portout "调用商品服务" as OrderToProduct
+  }
+  
+  component "支付服务\n(Payment Service)" as PaymentService #FF9800 {
+    portin "REST API" as PaymentIn
+    portout "MySQL" as PaymentDB
+    portout "RabbitMQ" as PaymentMQ
+    portout "调用订单服务" as PaymentToOrder
+  }
+  
+  note right of OrderService
+    **核心服务**
+    涉及分布式事务
+    需要调用商品服务
+  end note
+  
+  note right of PaymentService
+    **核心服务**
+    涉及分布式事务
+    需要调用订单服务
+  end note
+}
+
+' ===== 基础设施层 =====
+package "基础设施层 (Infrastructure Layer)" {
+  
+  ' 服务注册与配置
+  component "Nacos\n服务注册与配置中心" as Nacos #E1BEE7 {
+    portin "服务注册" as NacosRegister
+    portin "配置管理" as NacosConfig
+  }
+  
+  ' 数据库
+  database "MySQL\n关系型数据库" as MySQL #FFF9C4 {
+    port "用户数据库" as UserDBPort
+    port "商品数据库" as ProductDBPort
+    port "订单数据库" as OrderDBPort
+    port "支付数据库" as PaymentDBPort
+  }
+  
+  ' 缓存
+  database "Redis\n缓存服务" as Redis #FFCCBC {
+    port "用户缓存" as UserCachePort
+    port "商品缓存" as ProductCachePort
+    port "订单缓存" as OrderCachePort
+    port "购物车缓存" as CartCachePort
+  }
+  
+  ' 消息队列
+  component "RabbitMQ\n消息队列" as RabbitMQ #C5E1A5 {
+    portin "订单消息" as OrderMQPort
+    portin "支付消息" as PaymentMQPort
+  }
+}
+
+' ===== 监控与日志层 =====
+package "监控与日志层 (Monitoring & Logging)" {
+  component "Prometheus\n+\nGrafana" as Monitor #B3E5FC
+  component "ELK Stack\n(日志收集)" as ELK #B2DFDB
+  component "Zipkin\n(链路追踪)" as Zipkin #F8BBD0
+}
+
+' ===== 连接关系 =====
+
+' 客户端 -> API网关
+WebClient --> GatewayIn : HTTPS
+MobileClient --> GatewayIn : HTTPS
+
+' API网关 -> 微服务
+GatewayOut --> UserIn
+GatewayOut --> ProductIn
+GatewayOut --> OrderIn
+GatewayOut --> PaymentIn
+
+' 微服务 -> Nacos（服务注册）
+UserService ..> NacosRegister : 注册
+ProductService ..> NacosRegister : 注册
+OrderService ..> NacosRegister : 注册
+PaymentService ..> NacosRegister : 注册
+Gateway ..> NacosRegister : 发现服务
+
+' 微服务 -> Nacos（配置管理）
+UserService ..> NacosConfig : 获取配置
+ProductService ..> NacosConfig : 获取配置
+OrderService ..> NacosConfig : 获取配置
+PaymentService ..> NacosConfig : 获取配置
+
+' 微服务 -> MySQL
+UserDB --> UserDBPort
+ProductDB --> ProductDBPort
+OrderDB --> OrderDBPort
+PaymentDB --> PaymentDBPort
+
+' 微服务 -> Redis
+UserCache --> UserCachePort
+ProductCache --> ProductCachePort
+OrderCache --> OrderCachePort
+
+' 微服务 -> RabbitMQ
+OrderMQ --> OrderMQPort
+PaymentMQ --> PaymentMQPort
+
+' 微服务间调用
+OrderToProduct --> ProductIn : HTTP/OpenFeign
+PaymentToOrder --> OrderIn : HTTP/OpenFeign
+
+' 监控与日志
+UserService ..> Monitor : 指标上报
+ProductService ..> Monitor : 指标上报
+OrderService ..> Monitor : 指标上报
+PaymentService ..> Monitor : 指标上报
+Gateway ..> Monitor : 指标上报
+
+UserService ..> ELK : 日志收集
+ProductService ..> ELK : 日志收集
+OrderService ..> ELK : 日志收集
+PaymentService ..> ELK : 日志收集
+
+UserService ..> Zipkin : 链路追踪
+ProductService ..> Zipkin : 链路追踪
+OrderService ..> Zipkin : 链路追踪
+PaymentService ..> Zipkin : 链路追踪
+
+' ===== 说明注释 =====
+legend right
+  **构件图图例**
+  |= 符号 |= 说明 |
+  | <back:#FFEB3B>　　　</back> | 基础微服务 |
+  | <back:#FF9800>　　　</back> | 核心业务服务 |
+  | <back:#90EE90>　　　</back> | API网关 |
+  | <back:#E1BEE7>　　　</back> | 服务注册/配置 |
+  | <back:#FFF9C4>　　　</back> | 数据库 |
+  | <back:#FFCCBC>　　　</back> | 缓存 |
+  | <back:#C5E1A5>　　　</back> | 消息队列 |
+  | <back:#B3E5FC>　　　</back> | 监控 |
+  | ──> | 同步调用/依赖 |
+  | ··> | 异步通信/注册 |
+  
+  **架构特点**
+  - 微服务架构：4个独立服务
+  - 服务注册与发现：Nacos
+  - API网关：统一入口
+  - 数据库隔离：每服务独立DB
+  - 分布式事务：Seata/MQ
+  - 监控完整：Prometheus+ELK+Zipkin
+end legend
+
+@enduml
+
+
+

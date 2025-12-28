@@ -1,0 +1,86 @@
+@startuml PaymentComponent_ProcessPayment_Activity
+
+!theme plain
+
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+title 支付构件 - 处理支付活动图
+
+start
+
+:接收创建支付请求;
+note right
+  输入参数：
+  - orderNumber: 订单号
+  - paymentMethod: 支付方式
+end note
+
+:验证请求参数;
+
+if (参数验证通过?) then (是)
+  
+  :调用OrderService查询订单详情;
+  
+  if (订单存在?) then (是)
+    
+    if (订单状态为PENDING_PAYMENT?) then (是)
+      
+      if (订单未过期?) then (是)
+        
+        :生成支付流水号;
+        note right
+          规则：PAY + 年月日 + 6位序列号
+          示例：PAY20251118001
+        end note
+        
+        :创建PaymentOrder实体;
+        :设置订单信息（订单ID、金额）;
+        :设置支付方式;
+        :设置支付状态为PENDING;
+        :设置支付超时时间（当前时间+15分钟）;
+        
+        :保存PaymentOrder到数据库;
+        
+        :根据支付方式获取支付网关;
+        
+        partition "调用第三方支付网关" {
+          if (支付方式 == ALIPAY?) then (是)
+            :调用AlipayGateway.processPayment();
+            :返回支付URL;
+          elseif (支付方式 == WECHAT?) then (是)
+            :调用WechatGateway.processPayment();
+            :返回支付二维码;
+          else (BANK_CARD)
+            :调用BankCardGateway.processPayment();
+            :返回支付表单;
+          endif
+        }
+        
+        :封装CreatePaymentResponse;
+        :返回支付订单创建成功;
+        
+        #4CAF50:返回200成功;
+        stop
+        
+      else (否)
+        #FF6B6B:返回400错误\n订单已过期;
+        stop
+      endif
+      
+    else (否)
+      #FF6B6B:返回409错误\n订单状态不允许支付;
+      stop
+    endif
+    
+  else (否)
+    #FF6B6B:返回404错误\n订单不存在;
+    stop
+  endif
+  
+else (否)
+  #FF6B6B:返回400错误\n参数验证失败;
+  stop
+endif
+
+@enduml

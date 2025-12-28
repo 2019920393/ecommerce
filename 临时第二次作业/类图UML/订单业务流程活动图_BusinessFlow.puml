@@ -1,0 +1,232 @@
+@startuml 订单创建与支付完整业务流程
+' 设置中文字体支持
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 12
+
+' 设置活动图样式
+skinparam activity {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  BorderThickness 2
+  FontSize 12
+  DiamondBackgroundColor #FFEB3B
+  DiamondBorderColor #F57C00
+  StartColor #4CAF50
+  EndColor #F44336
+}
+
+skinparam shadowing false
+
+' 标题
+title 云原生微服务电商平台 - 订单创建与支付完整业务流程 (UML 2.5)
+center footer UML版本: UML 2.5 | 建模工具: PlantUML | 业务流程: UC9 + UC10
+
+|用户|
+start
+:用户浏览商品;
+:选择商品;
+
+if (立即购买?) then (是)
+  :直接进入订单确认;
+else (否)
+  :加入购物车;
+  :查看购物车;
+  note right
+    可以调整数量
+    或删除商品
+  end note
+  :点击"去结算";
+endif
+
+' ====== UC9: 创建订单 ======
+partition "**UC9: 创建订单**" #LightYellow {
+  :进入订单确认页面;
+  
+  |系统|
+  :显示收货地址列表;
+  
+  |用户|
+  if (是否有收货地址?) then (无/新增)
+    :填写新收货地址;
+    note right
+      收货人、电话
+      省市区、详细地址
+    end note
+    |系统|
+    :保存收货地址;
+  else (有)
+    :选择已有地址;
+  endif
+  
+  |系统|
+  :显示订单商品清单;
+  :显示订单总金额;
+  
+  |用户|
+  :核对订单信息;
+  :点击"提交订单";
+  
+  |系统|
+  :校验登录状态;
+  :校验收货地址;
+  
+  ' 库存检查
+  if (检查商品库存?) then (库存不足)
+    |系统|
+    :显示"库存不足"提示;
+    |用户|
+    :返回购物车;
+    stop
+  else (库存充足)
+    |系统|
+    :调用库存服务;
+    :预扣商品库存;
+    note right
+      锁定库存
+      防止超卖
+    end note
+    
+    :生成唯一订单号;
+    note right
+      格式: ORD+时间戳+随机数
+      18位唯一标识
+    end note
+    
+    :创建订单记录;
+    :设置订单状态="待支付";
+    :设置超时时间=30分钟;
+    note right
+      超时未支付
+      自动取消订单
+      释放库存
+    end note
+    
+    :跳转到支付页面;
+    :显示订单号和倒计时;
+  endif
+}
+
+' ====== UC10: 订单支付 ======
+partition "**UC10: 订单支付**" #LightCyan {
+  |系统|
+  :显示订单信息;
+  :显示支付方式选项;
+  note right
+    支付宝
+    微信支付
+    银行卡（模拟）
+  end note
+  
+  |用户|
+  if (立即支付?) then (否)
+    :关闭页面;
+    note right
+      稍后在"我的订单"
+      中继续支付
+    end note
+    detach
+  else (是)
+    :选择支付方式;
+    :点击"确认支付";
+    
+    |系统|
+    :模拟支付处理;
+    note right
+      显示"支付处理中..."
+      等待2秒
+    end note
+    
+    ' 支付结果判断
+    if (支付结果?) then (成功 90%)
+      :生成支付流水号;
+      note right
+        格式: PAY+时间戳+随机数
+        20位唯一标识
+      end note
+      
+      :更新订单状态="待发货";
+      :实际扣减商品库存;
+      :清空购物车;
+      :记录支付成功日志;
+      
+      |用户|
+      :跳转到支付成功页面;
+      :显示订单号和支付金额;
+      note right
+        显示绿色对勾
+        "支付成功"
+        预计发货时间
+      end note
+      
+      :查看订单详情;
+      :等待发货;
+      
+      stop
+      
+    else (失败 10%)
+      |系统|
+      :记录支付失败原因;
+      :更新订单状态="已取消";
+      :释放预扣库存;
+      
+      |用户|
+      :显示"支付失败"提示;
+      note right
+        显示失败原因：
+        - 账户余额不足
+        - 支付超时
+      end note
+      
+      if (重新购买?) then (是)
+        :返回商品页面;
+        stop
+      else (否)
+        :返回订单列表;
+        stop
+      endif
+    endif
+  endif
+}
+
+' 超时取消流程
+|系统定时任务|
+fork
+  :监控待支付订单;
+  if (30分钟超时?) then (是)
+    :自动取消订单;
+    :更新订单状态="已取消";
+    :释放预扣库存;
+    note right
+      取消原因：超时未支付
+    end note
+  endif
+fork again
+  :正常流程继续;
+end fork
+
+legend right
+  **业务流程图例**
+  |= 符号 |= 说明 |
+  | <back:#E3F2FD>活动</back> | 用户或系统操作 |
+  | <back:#FFEB3B>◇</back> | 判断/分支 |
+  | <back:#4CAF50>●</back> | 开始 |
+  | <back:#F44336>●</back> | 结束 |
+  | <back:#LightYellow>分区</back> | UC9创建订单 |
+  | <back:#LightCyan>分区</back> | UC10订单支付 |
+  
+  **关键节点**
+  - **库存预扣**: 防止超卖
+  - **30分钟超时**: 自动取消订单
+  - **支付成功率**: 90%（模拟）
+  - **支付失败率**: 10%（模拟）
+  
+  **泳道说明**
+  - **用户**: 用户操作
+  - **系统**: 系统处理
+  - **系统定时任务**: 后台任务
+end legend
+
+@enduml
+
+
+

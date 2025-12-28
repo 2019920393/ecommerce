@@ -1,0 +1,122 @@
+@startuml OrderComponent_CreateOrder_Activity
+
+!theme plain
+
+' ============================
+' 中文字体配置
+' ============================
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+title 订单构件 - 创建订单活动图
+
+start
+
+:接收创建订单请求;
+note right
+  输入参数：
+  - userId: 用户ID
+  - cartItemIds: 购物车项ID列表
+  - addressId: 收货地址ID
+  - remark: 订单备注
+end note
+
+:验证请求参数;
+
+if (参数验证通过?) then (是)
+  
+  :调用CartService获取购物车商品信息;
+  
+  if (购物车项存在?) then (是)
+    
+    :调用ProductService获取商品详情;
+    
+    if (商品存在且上架?) then (是)
+      
+      :调用InventoryService批量校验库存;
+      
+      if (库存充足?) then (是)
+        
+        :生成订单号;
+        note right
+          规则：ORD + 年月日 + 6位序列号
+          示例：ORD20251118001
+        end note
+        
+        :创建Order实体;
+        :设置订单状态为PENDING_PAYMENT;
+        :设置订单超时时间（当前时间+30分钟）;
+        
+        :调用UserService获取收货地址;
+        :设置收货地址信息;
+        
+        :遍历购物车项创建OrderItem;
+        
+        repeat
+          :创建OrderItem实体;
+          :设置商品ID、名称、价格、数量;
+          :计算小计金额;
+          :添加到Order.items列表;
+        repeat while (还有更多商品?) is (是)
+        -> 否;
+        
+        :计算订单总金额;
+        note right
+          商品总额 = Σ(商品价格 × 数量)
+          运费 = 商品总额 >= 99 ? 0 : 10
+          应付总额 = 商品总额 + 运费
+        end note
+        
+        :开启Seata分布式事务;
+        
+        partition "分布式事务" {
+          :调用InventoryService锁定库存;
+          note right
+            使用乐观锁更新库存：
+            available_stock -= quantity
+            locked_stock += quantity
+            version += 1
+          end note
+          
+          if (库存锁定成功?) then (是)
+            
+            :保存Order到orders表;
+            :批量保存OrderItem到order_items表;
+            
+            :提交分布式事务;
+            
+            :封装CreateOrderResponse;
+            :返回订单创建成功;
+            
+            stop
+            
+          else (否)
+            :回滚分布式事务;
+            :抛出StockLockFailedException;
+            
+            #FF6B6B:返回500错误\n库存锁定失败;
+            stop
+          endif
+        }
+        
+      else (否)
+        #FF6B6B:返回400错误\n库存不足;
+        stop
+      endif
+      
+    else (否)
+      #FF6B6B:返回404错误\n商品不存在或已下架;
+      stop
+    endif
+    
+  else (否)
+    #FF6B6B:返回404错误\n购物车项不存在;
+    stop
+  endif
+  
+else (否)
+  #FF6B6B:返回400错误\n参数验证失败;
+  stop
+endif
+
+@enduml

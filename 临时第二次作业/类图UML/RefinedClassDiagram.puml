@@ -1,0 +1,449 @@
+@startuml RefinedClassDiagram
+
+' ============================
+' 中文字体配置
+' ============================
+skinparam defaultFontName "Microsoft YaHei, SimHei, Arial Unicode MS"
+skinparam defaultFontSize 11
+
+' 设置样式
+skinparam classAttributeIconSize 0
+skinparam class {
+    BackgroundColor<<Boundary>> LightCyan
+    BackgroundColor<<Entity>> LightBlue
+    BackgroundColor<<Control>> LightYellow
+    BackgroundColor<<Repository>> LightGreen
+    BackgroundColor<<DTO>> Wheat
+    BackgroundColor<<Enum>> LightGreen
+    BorderColor Black
+    ArrowColor Black
+}
+
+title UC9 & UC10 精化后的类图 - 基于分层架构+MVC模式
+
+' ============================
+' 表示层 - 边界类 (Boundary/Controller)
+' ============================
+
+package "表示层 (Presentation Layer)" {
+    
+    class OrderController <<Boundary>> {
+        - orderService: OrderService
+        --
+        + prepareOrder(userId, cartItemIds): ResponseEntity<OrderConfirmData>
+        + createOrder(request: CreateOrderRequest): ResponseEntity<CreateOrderResponse>
+        + getOrderDetail(orderNumber): ResponseEntity<OrderDTO>
+        + getUserOrders(userId, status, page, size): ResponseEntity<Page<OrderDTO>>
+        + cancelOrder(orderNumber): ResponseEntity<Void>
+    }
+    
+    class PaymentController <<Boundary>> {
+        - paymentService: PaymentService
+        --
+        + getPaymentPage(orderNumber): ResponseEntity<PaymentPageData>
+        + createPayment(request: CreatePaymentRequest): ResponseEntity<PaymentResponse>
+        + queryPaymentStatus(paymentNumber): ResponseEntity<PaymentStatusDTO>
+        + handleCallback(callbackData): ResponseEntity<Void>
+    }
+    
+    ' DTO类
+    class CreateOrderRequest <<DTO>> {
+        + userId: Long
+        + cartItemIds: List<Long>
+        + addressId: Long
+        + remark: String
+    }
+    
+    class CreateOrderResponse <<DTO>> {
+        + orderNumber: String
+        + totalAmount: BigDecimal
+        + createTime: DateTime
+        + expireTime: DateTime
+    }
+    
+    class CreatePaymentRequest <<DTO>> {
+        + orderNumber: String
+        + paymentMethod: String
+    }
+    
+    class PaymentResponse <<DTO>> {
+        + paymentNumber: String
+        + amount: BigDecimal
+        + status: String
+        + createTime: DateTime
+    }
+    
+    class OrderDTO <<DTO>> {
+        + orderNumber: String
+        + userId: Long
+        + totalAmount: BigDecimal
+        + status: String
+        + items: List<OrderItemDTO>
+        + shippingAddress: String
+        + createTime: DateTime
+    }
+    
+    class PaymentStatusDTO <<DTO>> {
+        + paymentNumber: String
+        + status: String
+        + payTime: DateTime
+    }
+}
+
+' ============================
+' 业务逻辑层 - 控制类 (Control/Service)
+' ============================
+
+package "业务逻辑层 (Business Logic Layer)" {
+    
+    class OrderService <<Control>> {
+        - orderRepository: OrderRepository
+        - inventoryService: InventoryService
+        --
+        + prepareOrder(userId, cartItemIds): OrderConfirmData
+        + createOrder(request: CreateOrderRequest): Order
+        + validateOrder(userId, cartItems, addressId): Boolean
+        + updateOrderStatus(orderNumber, newStatus): void
+        + cancelOrder(orderNumber): void
+        + getOrderDetail(orderNumber): Order
+        + queryUserOrders(userId, status, page, size): Page<Order>
+        + checkTimeout(): void
+        + autoCancel(orderNumber): void
+    }
+    
+    class InventoryService <<Control>> {
+        - inventoryRepository: InventoryRepository
+        - retryCount: Integer
+        --
+        + checkStock(productId, quantity): Boolean
+        + batchCheckStock(items): Map<Long, Boolean>
+        + lockStock(productId, quantity, orderNumber): Boolean
+        + deductStock(orderNumber): Boolean
+        + releaseStock(orderNumber): Boolean
+        + updateStock(productId, quantity): void
+        + getAvailableStock(productId): Integer
+        + autoReleaseExpiredLocks(): void
+    }
+    
+    class PaymentService <<Control>> {
+        - paymentOrderRepository: PaymentOrderRepository
+        - paymentRecordRepository: PaymentRecordRepository
+        - orderService: OrderService
+        - mockPaymentSuccessRate: Double
+        --
+        + getOrderForPayment(orderNumber): PaymentPageData
+        + createPaymentOrder(orderNumber, paymentMethod): PaymentOrder
+        + processPayment(paymentNumber): Boolean
+        + queryPaymentStatus(paymentNumber): PaymentStatus
+        + getPaymentRecord(paymentNumber): PaymentRecord
+        + queryUserPayments(userId, startTime, endTime): List<PaymentRecord>
+        + retryPayment(paymentNumber): Boolean
+    }
+    
+    class PaymentCallbackHandler <<Control>> {
+        - paymentService: PaymentService
+        - orderService: OrderService
+        - inventoryService: InventoryService
+        --
+        + handleCallback(paymentNumber, status, payTime, details): void
+        + handleSuccess(paymentNumber): void
+        + handleFailure(paymentNumber): void
+        + syncOrderStatus(orderNumber, paymentStatus): void
+        + notifyUser(userId, message): void
+        + rollbackOnFailure(orderNumber): void
+    }
+}
+
+' ============================
+' 领域层 - 实体类 (Entity)
+' ============================
+
+package "领域层 (Domain Layer)" {
+    
+    class User <<Entity>> {
+        - userId: Long
+        - username: String
+        - password: String
+        - phone: String
+        - email: String
+        - role: String
+        - status: String
+        --
+        + register(username, password, phone): User
+        + login(username, password): Boolean
+        + isAdmin(): Boolean
+        + isActive(): Boolean
+    }
+    
+    class Order <<Entity>> {
+        - orderId: Long
+        - orderNumber: String
+        - userId: Long
+        - totalAmount: BigDecimal
+        - status: OrderStatus
+        - createTime: DateTime
+        - expireTime: DateTime
+        --
+        + createOrder(userId, cartItems, addressId): Order
+        + calculateTotalAmount(): BigDecimal
+        + updateStatus(newStatus): void
+        + cancel(): void
+        + isPaid(): Boolean
+        + isExpired(): Boolean
+    }
+    
+    class OrderItem <<Entity>> {
+        - itemId: Long
+        - orderId: Long
+        - productId: Long
+        - productName: String
+        - unitPrice: BigDecimal
+        - quantity: Integer
+        - subtotal: BigDecimal
+        --
+        + calculateSubtotal(): BigDecimal
+        + createFromCartItem(cartItem): OrderItem
+    }
+    
+    class Product <<Entity>> {
+        - productId: Long
+        - productName: String
+        - price: BigDecimal
+        - stock: Integer
+        - status: String
+        --
+        + isAvailable(): Boolean
+        + hasStock(quantity): Boolean
+    }
+    
+    class ShoppingCart <<Entity>> {
+        - cartId: Long
+        - userId: Long
+        --
+        + addItem(productId, quantity): CartItem
+        + removeItem(cartItemId): void
+        + clear(): void
+        + getItems(): List<CartItem>
+    }
+    
+    class CartItem <<Entity>> {
+        - cartItemId: Long
+        - cartId: Long
+        - productId: Long
+        - quantity: Integer
+        - selected: Boolean
+        --
+        + updateQuantity(quantity): void
+        + calculateSubtotal(): BigDecimal
+    }
+    
+    class ShippingAddress <<Entity>> {
+        - addressId: Long
+        - userId: Long
+        - recipientName: String
+        - phone: String
+        - province: String
+        - city: String
+        - district: String
+        - detailAddress: String
+        - isDefault: Boolean
+        --
+        + getFullAddress(): String
+    }
+    
+    class Inventory <<Entity>> {
+        - inventoryId: Long
+        - productId: Long
+        - totalStock: Integer
+        - availableStock: Integer
+        - lockedStock: Integer
+        - version: Integer
+        --
+        + checkStock(quantity): Boolean
+        + lockStock(quantity, orderNumber): Boolean
+        + deductStock(orderNumber): Boolean
+        + releaseStock(orderNumber): Boolean
+    }
+    
+    class PaymentOrder <<Entity>> {
+        - paymentId: Long
+        - paymentNumber: String
+        - orderId: Long
+        - amount: BigDecimal
+        - paymentMethod: PaymentMethod
+        - status: PaymentStatus
+        - createTime: DateTime
+        - expireTime: DateTime
+        --
+        + create(orderId, amount, method): PaymentOrder
+        + updateStatus(newStatus): void
+        + isExpired(): Boolean
+        + canPay(): Boolean
+    }
+    
+    class PaymentRecord <<Entity>> {
+        - recordId: Long
+        - paymentNumber: String
+        - userId: Long
+        - orderId: Long
+        - amount: BigDecimal
+        - status: PaymentStatus
+        - payTime: DateTime
+        --
+        + create(paymentOrder, status, details): PaymentRecord
+    }
+    
+    ' 枚举类
+    enum OrderStatus <<Enum>> {
+        PENDING_PAYMENT
+        PENDING_SHIPMENT
+        PENDING_RECEIPT
+        COMPLETED
+        CANCELLED
+        --
+        + getCode(): Integer
+        + getDescription(): String
+    }
+    
+    enum PaymentStatus <<Enum>> {
+        PENDING
+        SUCCESS
+        FAILED
+        --
+        + getCode(): Integer
+        + getDescription(): String
+    }
+    
+    enum PaymentMethod <<Enum>> {
+        ALIPAY
+        WECHAT
+        BANK_CARD
+        MOCK
+        --
+        + getCode(): Integer
+        + getDescription(): String
+    }
+}
+
+' ============================
+' 数据访问层 - Repository
+' ============================
+
+package "数据访问层 (Data Access Layer)" {
+    
+    interface OrderRepository <<Repository>> {
+        + save(order: Order): Order
+        + findById(orderId: Long): Order
+        + findByOrderNumber(orderNumber: String): Order
+        + findByUserId(userId: Long): List<Order>
+        + update(order: Order): void
+        + delete(orderId: Long): void
+    }
+    
+    interface PaymentOrderRepository <<Repository>> {
+        + save(paymentOrder: PaymentOrder): PaymentOrder
+        + findById(paymentId: Long): PaymentOrder
+        + findByPaymentNumber(paymentNumber: String): PaymentOrder
+        + findByOrderId(orderId: Long): PaymentOrder
+        + update(paymentOrder: PaymentOrder): void
+    }
+    
+    interface PaymentRecordRepository <<Repository>> {
+        + save(record: PaymentRecord): PaymentRecord
+        + findByPaymentNumber(paymentNumber: String): List<PaymentRecord>
+        + findByUserId(userId: Long): List<PaymentRecord>
+        + findByOrderId(orderId: Long): List<PaymentRecord>
+    }
+    
+    interface InventoryRepository <<Repository>> {
+        + save(inventory: Inventory): Inventory
+        + findByProductId(productId: Long): Inventory
+        + update(inventory: Inventory): void
+        + updateWithOptimisticLock(inventory: Inventory): Boolean
+    }
+}
+
+' ============================
+' 分层关系
+' ============================
+
+' Controller依赖Service
+OrderController ..> OrderService : <<use>>
+PaymentController ..> PaymentService : <<use>>
+
+' Controller使用DTO
+OrderController ..> CreateOrderRequest : <<use>>
+OrderController ..> CreateOrderResponse : <<use>>
+OrderController ..> OrderDTO : <<use>>
+PaymentController ..> CreatePaymentRequest : <<use>>
+PaymentController ..> PaymentResponse : <<use>>
+PaymentController ..> PaymentStatusDTO : <<use>>
+
+' Service依赖Repository
+OrderService ..> OrderRepository : <<use>>
+PaymentService ..> PaymentOrderRepository : <<use>>
+PaymentService ..> PaymentRecordRepository : <<use>>
+InventoryService ..> InventoryRepository : <<use>>
+
+' Service依赖Entity
+OrderService ..> Order : <<create>>
+OrderService ..> OrderItem : <<create>>
+PaymentService ..> PaymentOrder : <<create>>
+PaymentService ..> PaymentRecord : <<create>>
+InventoryService ..> Inventory : <<manage>>
+
+' Service之间的依赖
+OrderService ..> InventoryService : <<call>>
+PaymentService ..> OrderService : <<call>>
+PaymentCallbackHandler ..> PaymentService : <<call>>
+PaymentCallbackHandler ..> OrderService : <<call>>
+PaymentCallbackHandler ..> InventoryService : <<call>>
+
+' Repository操作Entity
+OrderRepository ..> Order : <<persist>>
+PaymentOrderRepository ..> PaymentOrder : <<persist>>
+PaymentRecordRepository ..> PaymentRecord : <<persist>>
+InventoryRepository ..> Inventory : <<persist>>
+
+' Entity之间的关系
+Order "1" *-- "1..*" OrderItem : 包含 >
+Order ..> OrderStatus : <<use>>
+PaymentOrder ..> PaymentStatus : <<use>>
+PaymentOrder ..> PaymentMethod : <<use>>
+PaymentRecord ..> PaymentStatus : <<use>>
+PaymentRecord ..> PaymentMethod : <<use>>
+
+' 注释说明
+note top of OrderController
+  **边界类（Boundary）**
+  - 处理HTTP请求
+  - 参数验证
+  - 返回JSON响应
+  - RESTful API设计
+end note
+
+note top of OrderService
+  **控制类（Control）**
+  - 业务逻辑处理
+  - 事务管理
+  - 服务编排
+  - 调用Repository
+end note
+
+note top of Order
+  **实体类（Entity）**
+  - 领域对象
+  - 业务规则
+  - 状态管理
+  - 数据验证
+end note
+
+note top of OrderRepository
+  **数据访问类（Repository）**
+  - 数据持久化
+  - CRUD操作
+  - 使用MyBatis-Plus
+  - 数据库交互
+end note
+
+@enduml

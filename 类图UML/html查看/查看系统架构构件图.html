@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>云原生电商平台 - 系统架构构件图查看器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: "Microsoft YaHei", "SimHei", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 50px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1976D2 0%, #01579B 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .info-card {
+            background: #f8f9fa;
+            border-left: 5px solid #1976D2;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+        
+        .info-card h3 {
+            color: #1976D2;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-box {
+            background: linear-gradient(135deg, #1976D2 0%, #01579B 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(25, 118, 210, 0.3);
+            transition: transform 0.3s;
+        }
+        
+        .stat-box:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-box .number {
+            font-size: 3em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .stat-box .label {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+        }
+        
+        .btn {
+            padding: 15px 30px;
+            font-size: 1.1em;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            color: white;
+            transition: all 0.3s;
+            display: inline-block;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #1976D2 0%, #01579B 100%);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%);
+        }
+        
+        .btn-info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        th {
+            background: linear-gradient(135deg, #1976D2 0%, #01579B 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: bold;
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        tr:hover {
+            background: #f5f5f5;
+        }
+        
+        .layer-client { background: #E3F2FD; }
+        .layer-gateway { background: #C8E6C9; }
+        .layer-service { background: #FFF9C4; }
+        .layer-infra { background: #FFE0B2; }
+        .layer-monitor { background: #F8BBD0; }
+        
+        .note {
+            background: #d1ecf1;
+            border-left: 5px solid #0c5460;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            color: #0c5460;
+        }
+        
+        .architecture-flow {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+            font-size: 1.1em;
+            line-height: 2;
+        }
+        
+        .footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            border-top: 1px solid #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏗️ 云原生微服务电商平台</h1>
+            <p>系统架构构件图 (UML 2.5 Component Diagram)</p>
+        </div>
+        
+        <div class="content">
+            <!-- 统计信息 -->
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="number">5</div>
+                    <div class="label">架构层次</div>
+                </div>
+                <div class="stat-box">
+                    <div class="number">4</div>
+                    <div class="label">微服务</div>
+                </div>
+                <div class="stat-box">
+                    <div class="number">4</div>
+                    <div class="label">基础设施</div>
+                </div>
+                <div class="stat-box">
+                    <div class="number">3</div>
+                    <div class="label">监控组件</div>
+                </div>
+            </div>
+            
+            <!-- 架构流程 -->
+            <div class="info-card">
+                <h3>📊 架构数据流向</h3>
+                <div class="architecture-flow">
+                    客户端（Web/Mobile）<br>
+                    ↓ HTTPS<br>
+                    <strong>API Gateway</strong>（Spring Cloud Gateway）<br>
+                    ↓ 路由转发<br>
+                    <strong>微服务层</strong>（User / Product / Order / Payment）<br>
+                    ↓ 数据持久化 & 服务调用<br>
+                    <strong>基础设施层</strong>（Nacos / MySQL / Redis / RabbitMQ）<br>
+                    ↓ 监控上报<br>
+                    <strong>监控与日志层</strong>（Prometheus / ELK / Zipkin）
+                </div>
+            </div>
+            
+            <!-- 快速操作 -->
+            <div class="info-card">
+                <h3>📂 查看构件图</h3>
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="openPlantUML()">
+                        🌐 在线PlantUML编辑器
+                    </button>
+                    <button class="btn btn-success" onclick="openLocalFile()">
+                        📄 打开本地.puml文件
+                    </button>
+                    <button class="btn btn-info" onclick="copyCode()">
+                        📋 复制PlantUML代码
+                    </button>
+                </div>
+                <div class="note">
+                    <strong>💡 提示：</strong>构件图源文件保存在 <code>类图UML/系统架构构件图_ComponentDiagram.puml</code>，使用VS Code的PlantUML插件可直接预览。
+                </div>
+            </div>
+            
+            <!-- 架构层次 -->
+            <div class="info-card">
+                <h3>🏢 架构层次说明</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>层次</th>
+                            <th>组件</th>
+                            <th>作用</th>
+                            <th>技术栈</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="layer-client">
+                            <td><strong>客户端层</strong></td>
+                            <td>Web浏览器、移动应用</td>
+                            <td>用户交互界面</td>
+                            <td>React / Vue</td>
+                        </tr>
+                        <tr class="layer-gateway">
+                            <td><strong>网关层</strong></td>
+                            <td>API Gateway</td>
+                            <td>统一入口、路由、鉴权、限流</td>
+                            <td>Spring Cloud Gateway</td>
+                        </tr>
+                        <tr class="layer-service">
+                            <td><strong>微服务层</strong></td>
+                            <td>4个业务微服务</td>
+                            <td>核心业务逻辑</td>
+                            <td>Spring Boot + Spring Cloud</td>
+                        </tr>
+                        <tr class="layer-infra">
+                            <td><strong>基础设施层</strong></td>
+                            <td>Nacos、MySQL、Redis、RabbitMQ</td>
+                            <td>服务注册、数据存储、缓存、消息队列</td>
+                            <td>Nacos + MySQL + Redis + RabbitMQ</td>
+                        </tr>
+                        <tr class="layer-monitor">
+                            <td><strong>监控日志层</strong></td>
+                            <td>Prometheus、ELK、Zipkin</td>
+                            <td>系统监控、日志收集、链路追踪</td>
+                            <td>Prometheus + Grafana + ELK + Zipkin</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- 微服务详情 -->
+            <div class="info-card">
+                <h3>🚀 微服务详细信息</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>微服务</th>
+                            <th>端口</th>
+                            <th>数据库</th>
+                            <th>主要功能</th>
+                            <th>依赖服务</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>用户服务</strong></td>
+                            <td>8081</td>
+                            <td>user_db</td>
+                            <td>注册、登录、信息管理、地址管理</td>
+                            <td>Nacos、MySQL、Redis</td>
+                        </tr>
+                        <tr>
+                            <td><strong>商品服务</strong></td>
+                            <td>8082</td>
+                            <td>product_db</td>
+                            <td>商品管理、分类、搜索、库存</td>
+                            <td>Nacos、MySQL、Redis</td>
+                        </tr>
+                        <tr style="background: #FFF3E0;">
+                            <td><strong>订单服务</strong></td>
+                            <td>8083</td>
+                            <td>order_db</td>
+                            <td>购物车、订单创建、查询、取消</td>
+                            <td>Nacos、MySQL、Redis、RabbitMQ、商品服务</td>
+                        </tr>
+                        <tr style="background: #FFF3E0;">
+                            <td><strong>支付服务</strong></td>
+                            <td>8084</td>
+                            <td>payment_db</td>
+                            <td>支付处理、支付查询、支付回调</td>
+                            <td>Nacos、MySQL、RabbitMQ、订单服务</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="note" style="margin-top: 15px;">
+                    <strong>⚠️ 注意：</strong>订单服务和支付服务是核心业务服务（黄色标记），涉及分布式事务处理。
+                </div>
+            </div>
+            
+            <!-- 基础设施组件 -->
+            <div class="info-card">
+                <h3>🔧 基础设施组件</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>组件</th>
+                            <th>端口</th>
+                            <th>作用</th>
+                            <th>使用场景</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Nacos</strong></td>
+                            <td>8848</td>
+                            <td>服务注册与发现、配置管理</td>
+                            <td>所有微服务注册、API网关服务发现</td>
+                        </tr>
+                        <tr>
+                            <td><strong>MySQL</strong></td>
+                            <td>3306</td>
+                            <td>关系型数据库</td>
+                            <td>每个服务独立数据库（user_db、product_db、order_db、payment_db）</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Redis</strong></td>
+                            <td>6379</td>
+                            <td>缓存服务</td>
+                            <td>用户缓存、商品缓存、订单缓存、购物车缓存</td>
+                        </tr>
+                        <tr>
+                            <td><strong>RabbitMQ</strong></td>
+                            <td>5672</td>
+                            <td>消息队列</td>
+                            <td>订单消息、支付消息（异步通信、分布式事务）</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- 监控组件 -->
+            <div class="info-card">
+                <h3>📈 监控与日志组件</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>组件</th>
+                            <th>端口</th>
+                            <th>作用</th>
+                            <th>监控内容</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Prometheus + Grafana</strong></td>
+                            <td>9090 / 3000</td>
+                            <td>指标监控与可视化</td>
+                            <td>CPU、内存、请求量、响应时间、错误率</td>
+                        </tr>
+                        <tr>
+                            <td><strong>ELK Stack</strong></td>
+                            <td>9200 / 5601</td>
+                            <td>日志收集与分析</td>
+                            <td>应用日志、错误日志、访问日志</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Zipkin</strong></td>
+                            <td>9411</td>
+                            <td>分布式链路追踪</td>
+                            <td>服务调用链、性能瓶颈、异常追踪</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- 构件关系说明 -->
+            <div class="info-card">
+                <h3>🔗 构件关系说明</h3>
+                <h4>1. 依赖关系（Dependency）</h4>
+                <ul style="margin: 10px 0 10px 30px; line-height: 1.8;">
+                    <li>所有微服务 <code>..></code> Nacos（服务注册）</li>
+                    <li>所有微服务 <code>..></code> Nacos（配置管理）</li>
+                    <li>所有微服务 <code>..></code> Prometheus（指标上报）</li>
+                    <li>所有微服务 <code>..></code> ELK Stack（日志收集）</li>
+                    <li>所有微服务 <code>..></code> Zipkin（链路追踪）</li>
+                </ul>
+                
+                <h4>2. 使用关系（Usage）</h4>
+                <ul style="margin: 10px 0 10px 30px; line-height: 1.8;">
+                    <li>客户端 <code>--></code> API Gateway（HTTPS访问）</li>
+                    <li>API Gateway <code>--></code> 各微服务（路由转发）</li>
+                    <li>微服务 <code>--></code> MySQL（数据持久化）</li>
+                    <li>微服务 <code>--></code> Redis（缓存读写）</li>
+                    <li>订单服务/支付服务 <code>--></code> RabbitMQ（消息发送）</li>
+                </ul>
+                
+                <h4>3. 服务间调用</h4>
+                <ul style="margin: 10px 0 10px 30px; line-height: 1.8;">
+                    <li>订单服务 <code>--></code> 商品服务（库存检查、库存预扣）</li>
+                    <li>支付服务 <code>--></code> 订单服务（状态更新、库存确认）</li>
+                    <li>调用方式：OpenFeign（HTTP同步调用）</li>
+                </ul>
+            </div>
+            
+            <!-- 架构优势 -->
+            <div class="info-card">
+                <h3>✨ 架构优势</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>特性</th>
+                            <th>说明</th>
+                            <th>实现方式</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>服务隔离</strong></td>
+                            <td>每个服务独立部署、独立数据库</td>
+                            <td>Docker容器化 + 独立MySQL数据库</td>
+                        </tr>
+                        <tr>
+                            <td><strong>高可用性</strong></td>
+                            <td>服务故障不影响其他服务</td>
+                            <td>服务注册与发现（Nacos）+ 负载均衡</td>
+                        </tr>
+                        <tr>
+                            <td><strong>可扩展性</strong></td>
+                            <td>水平扩展，增加服务实例</td>
+                            <td>Kubernetes容器编排 + 自动伸缩</td>
+                        </tr>
+                        <tr>
+                            <td><strong>可观测性</strong></td>
+                            <td>完整的监控、日志、追踪体系</td>
+                            <td>Prometheus + ELK + Zipkin</td>
+                        </tr>
+                        <tr>
+                            <td><strong>异步解耦</strong></td>
+                            <td>通过消息队列实现异步通信</td>
+                            <td>RabbitMQ消息队列</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p><strong>云原生微服务电商平台</strong> | UML 2.5 Component Diagram | 2025-11-05</p>
+            <p>文件位置：<code>类图UML/系统架构构件图_ComponentDiagram.puml</code></p>
+        </div>
+    </div>
+    
+    <script>
+        function openPlantUML() {
+            const url = 'http://www.plantuml.com/plantuml/uml/';
+            window.open(url, '_blank');
+            alert('PlantUML在线编辑器已打开！\n\n请复制.puml文件内容粘贴到编辑器中查看图形效果。');
+        }
+        
+        function openLocalFile() {
+            alert('请使用以下方式打开本地.puml文件：\n\n1. 使用VS Code安装PlantUML插件\n2. 打开 "类图UML/系统架构构件图_ComponentDiagram.puml"\n3. 按 Alt+D 预览图形');
+        }
+        
+        function copyCode() {
+            alert('✅ 请手动打开.puml文件复制完整代码！\n\n文件位置：类图UML/系统架构构件图_ComponentDiagram.puml');
+        }
+    </script>
+</body>
+</html>
+
